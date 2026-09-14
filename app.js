@@ -8,7 +8,9 @@
 
   const els = {
     fileInput: document.getElementById("file-input"),
+    folderInput: document.getElementById("folder-input"),
     pickButton: document.getElementById("pick-button"),
+    folderButton: document.getElementById("folder-button"),
     scanButton: document.getElementById("scan-button"),
     clearButton: document.getElementById("clear-button"),
     pasteInput: document.getElementById("paste-input"),
@@ -29,7 +31,9 @@
   };
 
   els.pickButton.addEventListener("click", () => els.fileInput.click());
+  els.folderButton.addEventListener("click", () => els.folderInput.click());
   els.fileInput.addEventListener("change", () => runFiles([...els.fileInput.files], true));
+  els.folderInput.addEventListener("change", () => runFiles([...els.folderInput.files], true));
   els.scanButton.addEventListener("click", runPasted);
   els.clearButton.addEventListener("click", clearAll);
   els.exportCsv.addEventListener("click", exportCsv);
@@ -87,6 +91,7 @@
     state.results = [];
     state.selectedId = null;
     els.fileInput.value = "";
+    els.folderInput.value = "";
     els.pasteInput.value = "";
     render();
     setStatus("Ready for Iconik metadata.");
@@ -166,11 +171,11 @@
   }
 
   function exportCsv() {
-    download("te_tool_iconik_lite_results_v1_0.csv", TeIconikLite.toCsv(state.results), "text/csv");
+    download("te_tool_iconik_lite_results_v1_1.csv", TeIconikLite.toCsv(state.results), "text/csv");
   }
 
   function exportJson() {
-    download("te_tool_iconik_lite_results_v1_0.json", JSON.stringify(state.results, null, 2), "application/json");
+    download("te_tool_iconik_lite_results_v1_1.json", JSON.stringify(state.results, null, 2), "application/json");
   }
 
   function download(name, content, type) {

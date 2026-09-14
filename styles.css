@@ -213,6 +213,12 @@ h3 {
   font-weight: 800;
 }
 
+.field small {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
 .field input,
 .paste-wrap textarea {
   width: 100%;
@@ -225,6 +231,16 @@ h3 {
 
 .paste-wrap {
   margin-top: 14px;
+}
+
+.bucket-note {
+  margin-top: 14px;
+  padding: 11px 12px;
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: #eaf7fb;
+  color: #244456;
+  font-size: .92rem;
 }
 
 .paste-wrap textarea {

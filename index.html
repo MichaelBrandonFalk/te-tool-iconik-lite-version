@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>TE Tool - Iconik Lite Version V1.0</title>
+    <title>TE Tool - Iconik Lite Version V1.1</title>
     <meta name="description" content="Lite SVOD metadata checker for Iconik MediaInfo exports from S3-hosted titles.">
     <link rel="icon" type="image/png" href="assets/te-tool-iconik-lite.png">
     <link rel="apple-touch-icon" href="assets/te-tool-iconik-lite.png">
@@ -16,11 +16,11 @@
         <div class="brand-lockup">
           <img class="brand-icon" src="assets/te-tool-iconik-lite.png" alt="">
           <div>
-            <p class="eyebrow">SVOD metadata checker <span data-version>V1.0</span></p>
+            <p class="eyebrow">SVOD metadata checker <span data-version>V1.1</span></p>
             <h1>TE Tool - Iconik Lite Version</h1>
           </div>
         </div>
-        <a class="button-link" href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.0/TE.Tool.Iconik.Lite.Version.V1_0.zip">Download V1.0</a>
+        <a class="button-link" href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.1/TE.Tool.Iconik.Lite.Version.V1_1.zip">Download V1.1</a>
       </header>
 
       <main class="workspace">
@@ -28,11 +28,13 @@
           <div class="input-head">
             <div>
               <h2>Scan Metadata</h2>
-              <p id="status-line" class="status-line" aria-live="polite">Drop Iconik metadata text files or paste one metadata block.</p>
+              <p id="status-line" class="status-line" aria-live="polite">Drop Iconik metadata text files, select a metadata folder, or paste one metadata block.</p>
             </div>
             <div class="actions">
               <input id="file-input" class="file-input" type="file" accept=".txt,.tsv,.csv,text/plain" multiple>
+              <input id="folder-input" class="file-input" type="file" accept=".txt,.tsv,.csv,text/plain" multiple webkitdirectory directory>
               <button id="pick-button" class="secondary-action" type="button">Select Files</button>
+              <button id="folder-button" class="secondary-action" type="button">Select Folder</button>
               <button id="scan-button" class="primary-action" type="button">Scan Paste</button>
               <button id="clear-button" class="secondary-action" type="button">Clear</button>
             </div>
@@ -41,12 +43,16 @@
           <div class="scan-grid">
             <div id="dropzone" class="dropzone">
               <strong>Drop metadata files here</strong>
-              <span>Each text file is treated as one Iconik title export.</span>
+              <span>For a whole bucket, first export or generate metadata text files, then select that folder here.</span>
             </div>
             <label class="field">
-              <span>S3 location or batch label</span>
+              <span>S3 location or batch label <small>report label only</small></span>
               <input id="s3-prefix" type="text" placeholder="s3://bucket/path/season-01/">
             </label>
+          </div>
+
+          <div class="bucket-note">
+            This browser app does not log in to S3 or inspect video files directly. Use <strong>Select Folder</strong> after you have Iconik/MediaInfo metadata text exports for the bucket.
           </div>
 
           <label class="paste-wrap">
@@ -126,18 +132,18 @@
 
         <section class="docs-grid">
           <div>
-            <h2>V1.0 SVOD Checks</h2>
+            <h2>V1.1 SVOD Checks</h2>
             <p>This lite version uses metadata fields visible in Iconik/MediaInfo text exports: MOV container, ProRes 422 HQ, video bit rate, 1920x1080, 16:9, frame rate, 4:2:2 chroma, progressive scan, PCM audio, stereo, 48 kHz, 24-bit audio, and zero start timecode.</p>
           </div>
           <div>
-            <h2>Not In Lite</h2>
-            <p>Head/tail dark frames, dynamic stereo, loudness, I-frame, luma, chroma continuity, and visual framing checks require media sampling. Those stay out of V1.0 because Iconik metadata exports alone cannot prove them.</p>
+            <h2>Whole Bucket Flow</h2>
+            <p>Use the S3 field as a batch label, then click Select Folder to scan a folder of metadata exports. Direct S3 crawling needs a local desktop/CLI build with AWS credentials and media inspection tools.</p>
           </div>
         </section>
       </main>
 
       <footer>
-        TE Tool - Iconik Lite Version V1.0. Source and releases are published at
+        TE Tool - Iconik Lite Version V1.1. Source and releases are published at
         <a href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version">github.com/MichaelBrandonFalk/te-tool-iconik-lite-version</a>.
       </footer>
     </div>

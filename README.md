@@ -4,7 +4,7 @@ TE Tool - Iconik Lite Version is a browser-first SVOD metadata checker for Iconi
 
 ## Version
 
-Current public version: `V1.0`
+Current public version: `V1.1`
 
 ## Browser App
 
@@ -18,13 +18,13 @@ The browser app runs locally in the page. Metadata text is not uploaded to a ser
 
 Download the offline browser app package:
 
-- [TE.Tool.Iconik.Lite.Version.V1_0.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.0/TE.Tool.Iconik.Lite.Version.V1_0.zip)
+- [TE.Tool.Iconik.Lite.Version.V1_1.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.1/TE.Tool.Iconik.Lite.Version.V1_1.zip)
 
 Open `index.html` from the package, or serve the folder with a small local web server.
 
 ## What It Checks
 
-V1.0 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
+V1.1 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
 - `.mov` file type
 - ProRes 422 HQ / `apch`
@@ -52,17 +52,32 @@ The full TE Tool checks some items by sampling the media with FFmpeg or by requi
 - Luma, true peaks, advanced chroma, and continuity
 - Video position, scale, and framing
 
+## Whole Bucket Workflow
+
+The S3 field in the browser app is a report label only. It does not log in to S3 or crawl a bucket.
+
+To scan a whole bucket with the browser app:
+
+1. Export or generate one Iconik/MediaInfo metadata text file per title.
+2. Put those metadata files in one folder.
+3. Open the browser app.
+4. Enter the bucket path as the batch label, such as `s3://gacm-deliver-vod/`.
+5. Click `Select Folder`.
+6. Export CSV or JSON results.
+
+Direct S3 crawling would require a local desktop/CLI build with AWS credentials and `mediainfo` or `ffprobe`.
+
 ## Local Build
 
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_0.sh
+./build_te_tool_iconik_lite_v1_1.sh
 ```
 
 The script creates:
 
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_0.zip`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_1.zip`
 
 ## Versioning
 
