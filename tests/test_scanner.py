@@ -7,7 +7,7 @@ import te_iconik_scanner as scanner
 
 
 class ScannerTests(unittest.TestCase):
-    def test_evaluate_record_pass_warning_fail(self):
+    def test_evaluate_record_pass_fail(self):
         asset = {"id": "asset-1", "title": "Test"}
         fobj = {
             "filename": "title.mov",
@@ -39,7 +39,7 @@ class ScannerTests(unittest.TestCase):
 
         fobj["technical_metadata"]["video"]["frame rate"] = "29.970"
         checks = scanner.evaluate_record(asset, fobj)
-        self.assertEqual(scanner.verdict_from_checks(checks), "WARNING")
+        self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
 
         fobj["technical_metadata"]["video"]["frame rate"] = "23.964"
         checks = scanner.evaluate_record(asset, fobj)

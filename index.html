@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>TE Tool - Iconik Lite Version V1.3</title>
+    <title>TE Tool - Iconik Lite Version V1.4</title>
     <meta name="description" content="Lite SVOD metadata checker for Iconik MediaInfo exports from S3-hosted titles.">
     <link rel="icon" type="image/png" href="assets/te-tool-iconik-lite.png">
     <link rel="apple-touch-icon" href="assets/te-tool-iconik-lite.png">
@@ -16,19 +16,48 @@
         <div class="brand-lockup">
           <img class="brand-icon" src="assets/te-tool-iconik-lite.png" alt="">
           <div>
-            <p class="eyebrow">SVOD metadata checker <span data-version>V1.3</span></p>
+            <p class="eyebrow">SVOD metadata checker <span data-version>V1.4</span></p>
             <h1>TE Tool - Iconik Lite Version</h1>
           </div>
         </div>
-        <a class="button-link" href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.3/TE.Tool.Iconik.Lite.Version.V1_3.zip">Download V1.3</a>
+        <a class="button-link" href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.4/TE.Tool.Iconik.Lite.Version.V1_4.zip">Download V1.4</a>
       </header>
 
       <main class="workspace">
-        <section class="input-panel" aria-label="Scan inputs">
+        <section class="direct-panel" aria-labelledby="direct-scan-title">
+          <div class="direct-grid">
+            <div>
+              <p class="eyebrow eyebrow-dark">Direct S3/Iconik Scan</p>
+              <h2 id="direct-scan-title">Paste the S3 folder or Iconik link here first</h2>
+              <p class="direct-lede">The public website cannot log in to S3 or Iconik from GitHub Pages. For a whole bucket, folder, or collection, download V1.4 and run the local scanner on your Mac; this page builds the Terminal command for the target you paste.</p>
+            </div>
+            <label class="field direct-target-field">
+              <span>S3 prefix or Iconik link</span>
+              <input id="direct-target" type="text" placeholder="s3://gacm-deliver-vod/">
+            </label>
+          </div>
+
+          <ol class="direct-steps">
+            <li><strong>Download V1.4</strong><span>Unzip it and open Terminal in the unzipped folder.</span></li>
+            <li><strong>Add credentials</strong><span>Set Iconik credentials. S3 targets also need local AWS credentials that can read the bucket.</span></li>
+            <li><strong>Run the command</strong><span>The scanner writes a pastel-coded XLSX report with movie files, upload dates, checks, and PASS/WARNING/FAIL on the far left.</span></li>
+          </ol>
+
+          <div class="command-panel">
+            <div class="command-head">
+              <strong>Terminal command</strong>
+              <button id="copy-command" class="secondary-action" type="button">Copy Command</button>
+            </div>
+            <pre><code id="direct-command"></code></pre>
+            <p id="direct-mode-note" class="direct-note"></p>
+          </div>
+        </section>
+
+        <section class="input-panel" aria-label="Browser metadata checker">
           <div class="input-head">
             <div>
-              <h2>Scan Metadata</h2>
-              <p id="status-line" class="status-line" aria-live="polite">Drop Iconik metadata text files, select a metadata folder, or paste one metadata block.</p>
+              <h2>Metadata Text Checker (Browser Only)</h2>
+              <p id="status-line" class="status-line" aria-live="polite">Drop Iconik/MediaInfo metadata text files, select a metadata export folder, or paste one metadata block.</p>
             </div>
             <div class="actions">
               <input id="file-input" class="file-input" type="file" accept=".txt,.tsv,.csv,text/plain" multiple>
@@ -46,13 +75,13 @@
               <span>For a whole bucket, first export or generate metadata text files, then select that folder here.</span>
             </div>
             <label class="field">
-              <span>S3 location or batch label <small>report label only</small></span>
-              <input id="s3-prefix" type="text" placeholder="s3://bucket/path/season-01/">
+              <span>Optional report label <small>not a direct S3 scanner</small></span>
+              <input id="s3-prefix" type="text" placeholder="gacm-deliver-vod batch label">
             </label>
           </div>
 
           <div class="bucket-note">
-            This browser app does not log in to S3 or inspect video files directly. Use <strong>Select Folder</strong> after you have Iconik/MediaInfo metadata text exports for the bucket.
+            This section only scans metadata text you already exported. If you paste an S3 path or Iconik link here, the page will move it to the Direct S3/Iconik Scan command builder above.
           </div>
 
           <label class="paste-wrap">
@@ -132,18 +161,18 @@
 
         <section class="docs-grid">
           <div>
-            <h2>V1.3 SVOD Checks</h2>
-            <p>This lite version follows TE Tool SVOD Phase 1 metadata rules: lowercase .mov, codec tag apch, video bit rate at least 145 Mb/s, 1920x1080, 16:9, frame rate rounded to 23.98 fps with 29.97 as warning, 4:2:2 chroma, progressive scan, PCM audio, expected PCM bit rate, 48 kHz, and 24-bit audio.</p>
+            <h2>V1.4 SVOD Checks</h2>
+            <p>This lite version follows the metadata-visible TE Tool SVOD checks: lowercase .mov, codec tag apch, video bit rate at least 145 Mb/s, 1920x1080, 16:9, frame rate rounded to 23.98 or 29.97 fps, 4:2:2 chroma, progressive scan, PCM audio, expected PCM bit rate, 48 kHz, and 24-bit audio. Checks that require sampling media are skipped.</p>
           </div>
           <div>
             <h2>Whole Bucket Flow</h2>
-            <p>Use the included local scanner for direct S3/Iconik reports. The browser screen still supports pasted or exported metadata; the Python scanner can list an S3 prefix, match Iconik assets, and write a pastel-coded XLSX report.</p>
+            <p>Use the included local scanner for direct S3/Iconik reports. It can list an S3 prefix, match Iconik assets, and write a pastel-coded XLSX report. The browser screen remains useful for pasted metadata exports only.</p>
           </div>
         </section>
       </main>
 
       <footer>
-        TE Tool - Iconik Lite Version V1.3. Source and releases are published at
+        TE Tool - Iconik Lite Version V1.4. Source and releases are published at
         <a href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version">github.com/MichaelBrandonFalk/te-tool-iconik-lite-version</a>.
       </footer>
     </div>

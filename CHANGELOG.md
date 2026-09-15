@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.4
+
+- Made the public page much clearer about the split between browser-only metadata checks and direct S3/Iconik scans.
+- Added a Direct S3/Iconik Scan command builder for `s3://` prefixes and Iconik collection or asset links.
+- Changed the SVOD frame-rate rule so `29.97` passes instead of warning, while other non-accepted rates still fail.
+- Added guardrails when S3/Iconik targets are pasted into the metadata-only fields.
+
 ## V1.3
 
 - Tightened SVOD metadata checks to follow TE Tool behavior more closely.

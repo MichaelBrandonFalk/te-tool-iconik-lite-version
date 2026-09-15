@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.3"
+VERSION = "V1.4"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -45,7 +45,7 @@ CHECK_DEFS = [
     ("video_bitrate", "Video bit rate", ">= 145 Mb/s"),
     ("resolution", "Resolution", "1920x1080"),
     ("aspect_ratio", "Aspect ratio", "16:9"),
-    ("frame_rate", "Frame rate", "23.98 fps"),
+    ("frame_rate", "Frame rate", "23.98 or 29.97 fps"),
     ("chroma", "Chroma sampling", "4:2:2"),
     ("scan_type", "Scan type", "Progressive"),
     ("audio_codec", "Audio codec", "PCM"),
@@ -551,11 +551,9 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) ->
     if check_id == "frame_rate":
         fps = parse_frame_rate(first(m, ["video.r frame rate", "r_frame_rate", "video.frame rate", "frame_rate", "frame rate"]))
         rounded = round_frame_rate(fps) if fps is not None else None
-        if rounded == "23.98":
+        if rounded in {"23.98", "29.97"}:
             return result(check_id, label, target, "pass", f"{rounded} fps")
-        if rounded == "29.97":
-            return result(check_id, label, target, "warning", f"{rounded} fps", "TE Tool warns on 29.97 for SVOD.")
-        return result(check_id, label, target, "fail", f"{rounded} fps" if rounded is not None else "missing", "Expected 23.98 fps for SVOD.")
+        return result(check_id, label, target, "fail", f"{rounded} fps" if rounded is not None else "missing", "Expected 23.98 or 29.97 fps for SVOD.")
     if check_id == "chroma":
         value = first(m, ["video.chroma subsampling", "chroma subsampling", "pix_fmt", "pixel format"])
         ok = "4:2:2" in lower(value) or lower(value).startswith("yuv422")

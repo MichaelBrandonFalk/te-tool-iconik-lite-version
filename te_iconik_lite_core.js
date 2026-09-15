@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "V1.3";
+  const VERSION = "V1.4";
   const MIN_VIDEO_BITRATE = 145000000;
 
   const CHECKS = [
@@ -69,14 +69,13 @@
     {
       id: "frame_rate",
       label: "Frame rate",
-      target: "23.98 fps",
+      target: "23.98 or 29.97 fps",
       evaluate: (m) => {
         const value = parseFrameRate(first(m, ["video.r_frame_rate", "r_frame_rate", "video.frame rate", "frame rate", "video.frame rate string"]));
         if (!Number.isFinite(value)) return fail("missing", "Frame rate was not available.");
         const rounded = roundFrameRate(value);
-        if (rounded === "23.98") return pass(`${rounded} fps`);
-        if (rounded === "29.97") return warn(`${rounded} fps`, "TE Tool warns on 29.97 for SVOD.");
-        return fail(`${rounded} fps`, "Expected 23.98 fps for SVOD.");
+        if (rounded === "23.98" || rounded === "29.97") return pass(`${rounded} fps`);
+        return fail(`${rounded} fps`, "Expected 23.98 or 29.97 fps for SVOD.");
       },
     },
     {
