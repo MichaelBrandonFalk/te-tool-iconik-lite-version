@@ -21,7 +21,7 @@ import te_iconik_scanner as scanner
 
 
 APP_NAME = "TE Tool - Iconik Lite Version"
-VERSION = "V1.5"
+VERSION = "V1.6"
 CONFIG_DIR = Path.home() / "Library" / "Application Support" / "TE Tool Iconik Lite"
 CONFIG_PATH = CONFIG_DIR / "settings.json"
 KEYCHAIN_SERVICE = "TE Tool Iconik Lite"
@@ -336,8 +336,8 @@ class IconikLiteApp(tk.Tk):
         super().__init__()
         configure_light_style(self)
         self.title(f"{APP_NAME} {VERSION}")
-        self.geometry("1180x760")
-        self.minsize(960, 640)
+        self.geometry("1360x900")
+        self.minsize(1180, 760)
         self.result_queue: "queue.Queue[tuple[str, Any]]" = queue.Queue()
         self.rows: List[scanner.ScanRow] = []
         self.current_output_path = default_output_path()
@@ -388,7 +388,7 @@ class IconikLiteApp(tk.Tk):
         outer = ttk.Frame(self, padding=16)
         outer.pack(fill=tk.BOTH, expand=True)
         outer.columnconfigure(0, weight=1)
-        outer.rowconfigure(5, weight=1)
+        outer.rowconfigure(5, weight=1, minsize=410)
 
         header = ttk.Frame(outer)
         header.grid(row=0, column=0, sticky="ew")
@@ -432,14 +432,22 @@ class IconikLiteApp(tk.Tk):
         ttk.Label(status_frame, textvariable=self.credential_status_var, style="Muted.TLabel").grid(row=0, column=1, sticky="e")
         ttk.Label(status_frame, textvariable=self.summary_var, style="Muted.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(3, 0))
 
-        panes = ttk.PanedWindow(outer, orient=tk.VERTICAL)
+        panes = tk.PanedWindow(
+            outer,
+            orient=tk.VERTICAL,
+            borderwidth=0,
+            sashwidth=8,
+            sashrelief=tk.RAISED,
+            background=APP_BG,
+            showhandle=True,
+        )
         panes.grid(row=5, column=0, sticky="nsew", pady=(12, 0))
 
         results_frame = ttk.LabelFrame(panes, text="Video Results", padding=8)
         results_frame.columnconfigure(0, weight=1)
         results_frame.rowconfigure(0, weight=1)
         columns = ("result", "title", "upload", "file", "s3", "fails", "warnings", "missing")
-        self.results_tree = ttk.Treeview(results_frame, columns=columns, show="headings", height=10)
+        self.results_tree = ttk.Treeview(results_frame, columns=columns, show="headings", height=12)
         headings = {
             "result": "Result",
             "title": "Title",
@@ -447,17 +455,19 @@ class IconikLiteApp(tk.Tk):
             "file": "File",
             "s3": "S3 / Storage Path",
             "fails": "Fails",
-            "warnings": "Warnings",
-            "missing": "Missing Info",
+            "warnings": "Warn",
+            "missing": "Missing",
         }
-        widths = {"result": 118, "title": 220, "upload": 160, "file": 210, "s3": 320, "fails": 60, "warnings": 80, "missing": 100}
+        widths = {"result": 112, "title": 280, "upload": 170, "file": 280, "s3": 420, "fails": 58, "warnings": 64, "missing": 74}
         for col in columns:
             self.results_tree.heading(col, text=headings[col])
             self.results_tree.column(col, width=widths[col], minwidth=50, stretch=col in {"title", "s3"})
         self.results_tree.grid(row=0, column=0, sticky="nsew")
         result_scroll = ttk.Scrollbar(results_frame, orient="vertical", command=self.results_tree.yview)
         result_scroll.grid(row=0, column=1, sticky="ns")
-        self.results_tree.configure(yscrollcommand=result_scroll.set)
+        result_xscroll = ttk.Scrollbar(results_frame, orient="horizontal", command=self.results_tree.xview)
+        result_xscroll.grid(row=1, column=0, sticky="ew")
+        self.results_tree.configure(yscrollcommand=result_scroll.set, xscrollcommand=result_xscroll.set)
         self.results_tree.tag_configure("pass", background=PASS_BG, foreground=TEXT)
         self.results_tree.tag_configure("warning", background=WARN_BG, foreground=TEXT)
         self.results_tree.tag_configure("fail", background=FAIL_BG, foreground=TEXT)
@@ -468,7 +478,7 @@ class IconikLiteApp(tk.Tk):
         details_frame.columnconfigure(0, weight=1)
         details_frame.rowconfigure(0, weight=1)
         detail_cols = ("check", "status", "value", "target", "note")
-        self.detail_tree = ttk.Treeview(details_frame, columns=detail_cols, show="headings", height=9)
+        self.detail_tree = ttk.Treeview(details_frame, columns=detail_cols, show="headings", height=8)
         detail_headings = {"check": "Check", "status": "Status", "value": "Value", "target": "Target", "note": "Note"}
         detail_widths = {"check": 180, "status": 90, "value": 170, "target": 170, "note": 440}
         for col in detail_cols:
@@ -477,14 +487,16 @@ class IconikLiteApp(tk.Tk):
         self.detail_tree.grid(row=0, column=0, sticky="nsew")
         detail_scroll = ttk.Scrollbar(details_frame, orient="vertical", command=self.detail_tree.yview)
         detail_scroll.grid(row=0, column=1, sticky="ns")
-        self.detail_tree.configure(yscrollcommand=detail_scroll.set)
+        detail_xscroll = ttk.Scrollbar(details_frame, orient="horizontal", command=self.detail_tree.xview)
+        detail_xscroll.grid(row=1, column=0, sticky="ew")
+        self.detail_tree.configure(yscrollcommand=detail_scroll.set, xscrollcommand=detail_xscroll.set)
         self.detail_tree.tag_configure("pass", background=PASS_BG, foreground=TEXT)
         self.detail_tree.tag_configure("warning", background=WARN_BG, foreground=TEXT)
         self.detail_tree.tag_configure("fail", background=FAIL_BG, foreground=TEXT)
         self.detail_tree.tag_configure("missing", background=MISSING_BG, foreground=TEXT)
 
-        panes.add(results_frame, weight=2)
-        panes.add(details_frame, weight=1)
+        panes.add(results_frame, minsize=220, stretch="always")
+        panes.add(details_frame, minsize=190, stretch="always")
 
         log_frame = ttk.LabelFrame(outer, text="Scan Log", padding=8)
         log_frame.grid(row=6, column=0, sticky="ew", pady=(12, 0))

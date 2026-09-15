@@ -70,6 +70,6 @@ assert.ok(missingResult.counts.missing > 0);
 const csv = core.toCsv([passResult]);
 assert.ok(csv.includes("PUR0003995"));
 assert.ok(csv.includes("File type"));
-assert.strictEqual(core.VERSION, "V1.5");
+assert.strictEqual(core.VERSION, "V1.6");
 
 console.log("core tests passed");

@@ -4,17 +4,17 @@ TE Tool - Iconik Lite Version is a plug-and-play macOS app for SVOD technical me
 
 ## Version
 
-Current public version: `V1.5`
+Current public version: `V1.6`
 
 ## Download
 
 - Public page: https://michaelbrandonfalk.github.io/te-tool-iconik-lite-version/
-- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.5/TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip)
+- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_6.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.6/TE.Tool.Iconik.Lite.Version.V1_6.macOS.Apple.Silicon.zip)
 
 ## App Workflow
 
 1. Download and unzip the Mac app.
-2. Open `TE Tool Iconik Lite Version V1_5.app`.
+2. Open `TE Tool Iconik Lite Version V1_6.app`.
 3. Open Settings and save AWS credentials for S3 scans.
 4. Save Iconik App-ID/Auth-Token for Iconik links and metadata lookups.
 5. Click **Test Iconik** in Settings to confirm the API connection.
@@ -42,7 +42,7 @@ The app lists each video, retrieves Iconik metadata, applies the SVOD checks, di
 
 ## What It Checks
 
-V1.5 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
+V1.6 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
 - lowercase `.mov` file type, matching TE Tool's case-sensitive check
 - `.mp4` file type as a warning, not a hard fail
@@ -82,13 +82,13 @@ The public web page still includes a small browser-only metadata text checker. I
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_5_mac.sh
+./build_te_tool_iconik_lite_v1_6_mac.sh
 ```
 
 The script creates:
 
-- `dist/TE Tool Iconik Lite Version V1_5.app`
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip`
+- `dist/TE Tool Iconik Lite Version V1_6.app`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_6.macOS.Apple.Silicon.zip`
 
 ## Versioning
 

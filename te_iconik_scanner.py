@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.5"
+VERSION = "V1.6"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)

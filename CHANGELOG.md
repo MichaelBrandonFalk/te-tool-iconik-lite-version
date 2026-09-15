@@ -1,5 +1,11 @@
 # Changelog
 
+## V1.6
+
+- Increased the desktop app's default and minimum window size so the report workspace has room to breathe.
+- Added horizontal scrolling to the Video Results and Selected Video Checks tables.
+- Gave the Video Results pane a larger minimum height and shortened narrow status-column headings so rows and right-side counts remain readable.
+
 ## V1.5
 
 - Added the plug-and-play macOS desktop app with Settings, saved AWS/Iconik credentials, hidden secret fields, paste-and-scan workflow, result table, check details, and XLSX output.
