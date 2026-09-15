@@ -1,5 +1,11 @@
 # Changelog
 
+## V1.3
+
+- Tightened SVOD metadata checks to follow TE Tool behavior more closely.
+- Updated frame-rate handling to round to two decimals and compare exactly: `23.98` pass, `29.97` warning, all others fail.
+- Made file extension checking case-sensitive and codec checking require the ProRes 422 HQ codec tag `apch`.
+
 ## V1.2
 
 - Added a local Iconik/S3 scanner that accepts Iconik collection/asset links or S3 prefixes.

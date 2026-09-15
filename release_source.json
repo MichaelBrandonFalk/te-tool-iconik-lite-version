@@ -1,8 +1,8 @@
 {
   "app": "TE Tool - Iconik Lite Version",
-  "version": "V1.2",
-  "release_tag": "v1.2",
+  "version": "V1.3",
+  "release_tag": "v1.3",
   "repo": "https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version",
   "public_page": "https://michaelbrandonfalk.github.io/te-tool-iconik-lite-version/",
-  "package": "TE.Tool.Iconik.Lite.Version.V1_2.zip"
+  "package": "TE.Tool.Iconik.Lite.Version.V1_3.zip"
 }

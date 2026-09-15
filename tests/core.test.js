@@ -34,6 +34,7 @@ Sampling rate\t48000`;
 
 const svodWarn = svodPass.replace(/Frame rate\t23\.976/g, "Frame rate\t29.970");
 const svodFail = svodPass.replace("Width\t1920", "Width\t1280").replace("Bit rate\t172557886", "Bit rate\t120000000");
+const svodBadFrame = svodPass.replace(/Frame rate\t23\.976/g, "Frame rate\t23.964");
 
 const passResult = core.evaluateMetadata(svodPass, "pass.txt");
 assert.strictEqual(passResult.verdict, "PASS");
@@ -49,9 +50,13 @@ assert.strictEqual(failResult.verdict, "FAIL");
 assert.ok(failResult.checks.some((check) => check.id === "resolution" && check.status === "fail"));
 assert.ok(failResult.checks.some((check) => check.id === "video_bitrate" && check.status === "fail"));
 
+const badFrameResult = core.evaluateMetadata(svodBadFrame, "bad-frame.txt");
+assert.strictEqual(badFrameResult.verdict, "FAIL");
+assert.ok(badFrameResult.checks.some((check) => check.id === "frame_rate" && check.status === "fail" && check.value === "23.96 fps"));
+
 const csv = core.toCsv([passResult]);
 assert.ok(csv.includes("PUR0003995"));
 assert.ok(csv.includes("File type"));
-assert.strictEqual(core.VERSION, "V1.2");
+assert.strictEqual(core.VERSION, "V1.3");
 
 console.log("core tests passed");

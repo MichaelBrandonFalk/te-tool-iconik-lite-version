@@ -4,7 +4,7 @@ TE Tool - Iconik Lite Version is a browser-first SVOD metadata checker for Iconi
 
 ## Version
 
-Current public version: `V1.2`
+Current public version: `V1.3`
 
 ## Browser App
 
@@ -18,20 +18,20 @@ The browser app runs locally in the page. Metadata text is not uploaded to a ser
 
 Download the offline browser app package:
 
-- [TE.Tool.Iconik.Lite.Version.V1_2.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.2/TE.Tool.Iconik.Lite.Version.V1_2.zip)
+- [TE.Tool.Iconik.Lite.Version.V1_3.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.3/TE.Tool.Iconik.Lite.Version.V1_3.zip)
 
 Open `index.html` from the package, or serve the folder with a small local web server.
 
 ## What It Checks
 
-V1.2 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
+V1.3 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
-- `.mov` file type
-- ProRes 422 HQ / `apch`
+- lowercase `.mov` file type, matching TE Tool's case-sensitive check
+- ProRes 422 HQ codec tag `apch`
 - Video bit rate at or above 145 Mb/s
 - `1920x1080` resolution
 - `16:9` aspect ratio
-- `23.98` fps, with `29.97` as a warning
+- frame rate rounded to two decimals exactly like TE Tool: `23.98` passes, `29.97` warns, all other values fail
 - `4:2:2` chroma
 - Progressive scan
 - PCM audio
@@ -54,7 +54,7 @@ The full TE Tool checks some items by sampling the media with FFmpeg or by requi
 
 ## Whole Bucket Workflow
 
-V1.2 includes a local scanner for direct Iconik/S3 reports.
+V1.3 includes a local scanner for direct Iconik/S3 reports.
 
 Use it with an Iconik collection link:
 
@@ -82,12 +82,12 @@ The browser page still supports pasted metadata, selected metadata files, and se
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_2.sh
+./build_te_tool_iconik_lite_v1_3.sh
 ```
 
 The script creates:
 
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_2.zip`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_3.zip`
 
 ## Versioning
 

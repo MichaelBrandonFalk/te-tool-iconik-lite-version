@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.2"
+VERSION = "V1.3"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -525,10 +525,11 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) ->
         return result(check_id, label, target, "pass" if ext == "mov" else "fail", ext or "missing", "Expected .mov file extension.")
     if check_id == "video_codec":
         codec = lower(first(m, ["video.codec id", "codec id", "codec_tag_string", "video.codec_tag_string"]))
-        fmt = lower(first(m, ["video.format", "format", "codec_name", "video.codec_name", "video.commercial name"]))
-        profile = lower(first(m, ["video.format profile", "profile", "format profile"]))
-        ok = codec == "apch" or (("prores" in fmt or "prores" in codec) and "422 hq" in profile)
-        return result(check_id, label, target, "pass" if ok else "fail", " ".join(x for x in [fmt or codec or "missing", profile] if x), "Expected ProRes 422 HQ.")
+        fmt = first(m, ["video.format", "format", "codec_name", "video.codec_name", "video.commercial name"])
+        profile = first(m, ["video.format profile", "profile", "format profile"])
+        ok = codec == "apch"
+        display = " ".join(x for x in [fmt or codec or "missing", profile, f"({codec})" if codec else ""] if x)
+        return result(check_id, label, target, "pass" if ok else "fail", display, "Expected ProRes 422 HQ codec tag apch.")
     if check_id == "video_bitrate":
         value = parse_number(first(m, ["video.bit rate", "video.bit_rate", "bit_rate", "overall bit rate"]))
         ok = value >= 145000000 if value is not None else False
@@ -548,12 +549,13 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) ->
         ok = raw == "16:9" or within(ratio, 1.76, 1.79) or within(calculated, 1.76, 1.79)
         return result(check_id, label, target, "pass" if ok else "fail", raw or (f"{calculated:.3f}" if calculated else "missing"), "Expected 16:9.")
     if check_id == "frame_rate":
-        fps = parse_frame_rate(first(m, ["video.frame rate", "frame_rate", "r_frame_rate", "frame rate"]))
-        if fps is not None and (abs(fps - 23.976) < 0.02 or abs(fps - 23.98) < 0.02):
-            return result(check_id, label, target, "pass", f"{fps:.3f} fps")
-        if fps is not None and abs(fps - 29.97) < 0.02:
-            return result(check_id, label, target, "warning", f"{fps:.3f} fps", "TE Tool warns on 29.97 for SVOD.")
-        return result(check_id, label, target, "fail", f"{fps:.3f} fps" if fps is not None else "missing", "Expected 23.98 fps for SVOD.")
+        fps = parse_frame_rate(first(m, ["video.r frame rate", "r_frame_rate", "video.frame rate", "frame_rate", "frame rate"]))
+        rounded = round_frame_rate(fps) if fps is not None else None
+        if rounded == "23.98":
+            return result(check_id, label, target, "pass", f"{rounded} fps")
+        if rounded == "29.97":
+            return result(check_id, label, target, "warning", f"{rounded} fps", "TE Tool warns on 29.97 for SVOD.")
+        return result(check_id, label, target, "fail", f"{rounded} fps" if rounded is not None else "missing", "Expected 23.98 fps for SVOD.")
     if check_id == "chroma":
         value = first(m, ["video.chroma subsampling", "chroma subsampling", "pix_fmt", "pixel format"])
         ok = "4:2:2" in lower(value) or lower(value).startswith("yuv422")
@@ -628,7 +630,7 @@ def lower(value: str) -> str:
 
 
 def clean_ext(value: str) -> str:
-    text = str(value or "").split("?")[0].strip().lower()
+    text = str(value or "").split("?")[0].strip()
     if "." in text:
         return text.rsplit(".", 1)[-1]
     return text
@@ -659,6 +661,10 @@ def parse_frame_rate(value: str) -> Optional[float]:
         return int(fraction.group(1)) / int(fraction.group(2))
     match = re.search(r"\d+(?:\.\d+)?", text)
     return float(match.group(0)) if match else None
+
+
+def round_frame_rate(value: float) -> str:
+    return f"{round(value + 1e-10, 2):.2f}"
 
 
 def parse_ratio(value: str) -> Optional[float]:

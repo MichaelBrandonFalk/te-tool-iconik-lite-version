@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "V1.2";
+  const VERSION = "V1.3";
   const MIN_VIDEO_BITRATE = 145000000;
 
   const CHECKS = [
@@ -21,10 +21,8 @@
       label: "Video codec",
       target: "ProRes 422 HQ / apch",
       evaluate: (m) => {
-        const codecId = lower(first(m, ["video.codec id", "codec id"]));
-        const format = lower(first(m, ["video.format", "video.commercial name", "video format list"]));
-        const profile = lower(first(m, ["video.format profile", "format profile"]));
-        const ok = codecId === "apch" || (format.includes("prores") && profile.includes("422 hq"));
+        const codecId = lower(first(m, ["video.codec id", "video.codec_tag_string", "codec id", "codec_tag_string"]));
+        const ok = codecId === "apch";
         return ok ? pass(displayCodec(m)) : fail(displayCodec(m), "Expected ProRes 422 HQ.");
       },
     },
@@ -73,11 +71,12 @@
       label: "Frame rate",
       target: "23.98 fps",
       evaluate: (m) => {
-        const value = parseFrameRate(first(m, ["video.frame rate", "frame rate", "video.frame rate string"]));
+        const value = parseFrameRate(first(m, ["video.r_frame_rate", "r_frame_rate", "video.frame rate", "frame rate", "video.frame rate string"]));
         if (!Number.isFinite(value)) return fail("missing", "Frame rate was not available.");
-        if (Math.abs(value - 23.976) < 0.02 || Math.abs(value - 23.98) < 0.02) return pass(`${value.toFixed(3)} fps`);
-        if (Math.abs(value - 29.97) < 0.02) return warn(`${value.toFixed(3)} fps`, "TE Tool warns on 29.97 for SVOD.");
-        return fail(`${value.toFixed(3)} fps`, "Expected 23.98 fps for SVOD.");
+        const rounded = roundFrameRate(value);
+        if (rounded === "23.98") return pass(`${rounded} fps`);
+        if (rounded === "29.97") return warn(`${rounded} fps`, "TE Tool warns on 29.97 for SVOD.");
+        return fail(`${rounded} fps`, "Expected 23.98 fps for SVOD.");
       },
     },
     {
@@ -284,6 +283,10 @@
     return number ? Number(number[0]) : NaN;
   }
 
+  function roundFrameRate(value) {
+    return (Math.round(value * 100) / 100).toFixed(2);
+  }
+
   function parseRatio(value) {
     const raw = String(value || "").trim();
     const colon = raw.match(/(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)/);
@@ -297,7 +300,7 @@
   }
 
   function cleanExtension(value) {
-    const raw = stripQuery(value).trim().toLowerCase();
+    const raw = stripQuery(value).trim();
     if (!raw) return "";
     if (raw.includes(".")) return raw.split(".").pop();
     return raw;
@@ -357,7 +360,7 @@
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   }
 
-  const api = { VERSION, CHECKS, INFO_CHECKS, evaluateMetadata, parseMetadataText, toCsv };
+  const api = { VERSION, CHECKS, INFO_CHECKS, evaluateMetadata, parseMetadataText, toCsv, parseFrameRate, roundFrameRate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.TeIconikLite = api;
 })(typeof globalThis !== "undefined" ? globalThis : window);

@@ -41,6 +41,11 @@ class ScannerTests(unittest.TestCase):
         checks = scanner.evaluate_record(asset, fobj)
         self.assertEqual(scanner.verdict_from_checks(checks), "WARNING")
 
+        fobj["technical_metadata"]["video"]["frame rate"] = "23.964"
+        checks = scanner.evaluate_record(asset, fobj)
+        self.assertEqual(scanner.verdict_from_checks(checks), "FAIL")
+
+        fobj["technical_metadata"]["video"]["frame rate"] = "23.976"
         fobj["technical_metadata"]["video"]["width"] = "1280"
         checks = scanner.evaluate_record(asset, fobj)
         self.assertEqual(scanner.verdict_from_checks(checks), "FAIL")
