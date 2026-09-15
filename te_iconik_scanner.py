@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.4"
+VERSION = "V1.5"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -203,7 +203,10 @@ def normalize_next_url(next_url: Any, fallback_path: str) -> Optional[str]:
 def parse_target(value: str) -> Tuple[str, str]:
     raw = value.strip()
     if S3_RE.match(raw):
-        return "s3", raw.rstrip("/") + "/"
+        match = S3_RE.match(raw)
+        bucket = match.group(1) if match else ""
+        key = (match.group(2) or "").strip("/") if match else ""
+        return "s3", f"s3://{bucket}/{key}" if key else f"s3://{bucket}/"
     parsed = urllib.parse.urlparse(raw)
     if parsed.scheme in ("http", "https"):
         if "/collection/" in parsed.path or "/collections/" in parsed.path:
@@ -316,8 +319,11 @@ def list_s3_inventory(s3_uri: str) -> List[S3InventoryObject]:
         raise RuntimeError("boto3 is required for direct S3 inventory. Install boto3 or use Iconik collection/link mode.") from error
 
     bucket = match.group(1)
-    prefix = (match.group(2) or "").strip("/")
-    if prefix:
+    raw_key = match.group(2) or ""
+    key_has_trailing_slash = raw_key.endswith("/")
+    prefix = raw_key.strip("/")
+    looks_like_file = bool(os.path.splitext(prefix)[1])
+    if prefix and (key_has_trailing_slash or not looks_like_file):
         prefix = prefix.rstrip("/") + "/"
 
     s3_client = boto3.session.Session().client(

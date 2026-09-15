@@ -57,6 +57,6 @@ assert.ok(badFrameResult.checks.some((check) => check.id === "frame_rate" && che
 const csv = core.toCsv([passResult]);
 assert.ok(csv.includes("PUR0003995"));
 assert.ok(csv.includes("File type"));
-assert.strictEqual(core.VERSION, "V1.4");
+assert.strictEqual(core.VERSION, "V1.5");
 
 console.log("core tests passed");

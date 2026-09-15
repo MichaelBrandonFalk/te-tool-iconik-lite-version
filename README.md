@@ -1,30 +1,46 @@
 # TE Tool - Iconik Lite Version
 
-TE Tool - Iconik Lite Version is a browser-first SVOD metadata checker for Iconik MediaInfo-style exports from S3-hosted titles.
+TE Tool - Iconik Lite Version is a plug-and-play macOS app for SVOD technical metadata checks on S3-hosted/Iconik-managed videos.
 
 ## Version
 
-Current public version: `V1.4`
-
-## Browser App
-
-Open the public browser version:
-
-- https://michaelbrandonfalk.github.io/te-tool-iconik-lite-version/
-
-The browser app runs locally in the page. Metadata text is not uploaded to a server.
+Current public version: `V1.5`
 
 ## Download
 
-Download the offline browser app package:
+- Public page: https://michaelbrandonfalk.github.io/te-tool-iconik-lite-version/
+- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.5/TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip)
 
-- [TE.Tool.Iconik.Lite.Version.V1_4.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.4/TE.Tool.Iconik.Lite.Version.V1_4.zip)
+## App Workflow
 
-Open `index.html` from the package, or serve the folder with a small local web server.
+1. Download and unzip the Mac app.
+2. Open `TE Tool Iconik Lite Version V1_5.app`.
+3. Open Settings and save AWS credentials for S3 scans.
+4. Save Iconik App-ID/Auth-Token for Iconik links and metadata lookups.
+5. Paste an S3 bucket, folder, file path, Iconik collection link, Iconik asset link, or asset UUID.
+6. Click Scan.
+
+The app lists each video, retrieves Iconik metadata when available, applies the SVOD checks, displays PASS/WARNING/FAIL results, and writes a pastel-coded XLSX report with upload date, S3/storage path, Iconik URL, and every check field.
+
+## Supported Targets
+
+- `s3://bucket/`
+- `s3://bucket/folder/`
+- `s3://bucket/folder/title.mov`
+- Iconik collection links
+- Iconik asset links
+- Iconik asset UUIDs
+
+## Credentials
+
+- AWS credentials are used for direct S3 bucket/folder/file inventory.
+- Iconik credentials are used to retrieve asset/file metadata and to scan Iconik links.
+- In the Mac app, secrets are saved through macOS Keychain when available and hidden by default in Settings.
+- The app can use an existing AWS provider chain/profile if AWS credentials are not saved in Settings.
 
 ## What It Checks
 
-V1.4 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
+V1.5 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
 - lowercase `.mov` file type, matching TE Tool's case-sensitive check
 - ProRes 422 HQ codec tag `apch`
@@ -52,44 +68,22 @@ The full TE Tool checks some items by sampling the media with FFmpeg or by requi
 - Luma, true peaks, advanced chroma, and continuity
 - Video position, scale, and framing
 
-## Whole Bucket Workflow
+## Browser Metadata Checker
 
-V1.4 includes a local scanner for direct Iconik/S3 reports.
-
-The public GitHub Pages app cannot log in to S3 or Iconik directly. Paste the S3 prefix or Iconik link into the Direct S3/Iconik Scan field on the page, then use the generated command from the downloaded package.
-
-Use it with an Iconik collection link:
-
-```bash
-export ICONIK_APP_ID="your-app-id"
-export ICONIK_AUTH_TOKEN="your-auth-token"
-python3 te_iconik_scanner.py "https://app.iconik.io/collection/92690826-2270-11f1-9bc5-8ee2128f6d19" -o te_iconik_lite_report.xlsx
-```
-
-Or use it with an S3 prefix:
-
-```bash
-python3 -m pip install -r requirements.txt
-export ICONIK_APP_ID="your-app-id"
-export ICONIK_AUTH_TOKEN="your-auth-token"
-python3 te_iconik_scanner.py "s3://gacm-deliver-vod/" -o te_iconik_lite_report.xlsx
-```
-
-For `s3://` targets, the scanner first builds a base S3 inventory using local AWS credentials, then matches those video objects to Iconik asset/file metadata. This uses the same kind of paginated S3 inventory approach as S3 Organizer. If direct S3 inventory is not available, it falls back to Iconik search.
-
-The browser page still supports pasted metadata, selected metadata files, and selected folders of metadata exports.
+The public web page still includes a small browser-only metadata text checker. It is secondary. It can scan pasted/exported Iconik or MediaInfo metadata text, but it cannot authenticate to S3 or Iconik from GitHub Pages.
 
 ## Local Build
 
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_4.sh
+./build_te_tool_iconik_lite_v1_5_mac.sh
 ```
 
 The script creates:
 
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_4.zip`
+- `dist/TE Tool Iconik Lite Version V1_5.app`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip`
 
 ## Versioning
 

@@ -102,7 +102,7 @@ h3 {
   padding: 22px;
 }
 
-.direct-panel,
+.app-panel,
 .input-panel,
 .summary-strip,
 .results-panel,
@@ -113,16 +113,16 @@ h3 {
   border-radius: 8px;
 }
 
-.direct-panel,
+.app-panel,
 .input-panel {
   padding: 18px;
 }
 
-.direct-panel {
+.app-panel {
   margin-bottom: 16px;
 }
 
-.direct-panel.is-highlighted {
+.app-panel.is-highlighted {
   outline: 3px solid #b9dce7;
   outline-offset: 2px;
 }
@@ -131,25 +131,47 @@ h3 {
   color: var(--accent-strong);
 }
 
-.direct-grid {
+.app-grid {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(280px, .95fr);
   gap: 18px;
-  align-items: end;
+  align-items: start;
 }
 
-.direct-lede {
-  margin-bottom: 0;
+.app-lede {
+  margin-bottom: 16px;
   color: #3f5164;
 }
 
-.direct-target-field input {
-  min-height: 52px;
-  font-size: 1rem;
-  font-weight: 700;
+.app-download {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
 }
 
-.direct-steps {
+.supported-panel {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.supported-panel ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.supported-panel li + li {
+  margin-top: 6px;
+}
+
+.supported-panel code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .86rem;
+}
+
+.app-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, 1fr));
   gap: 12px;
@@ -158,56 +180,20 @@ h3 {
   list-style-position: inside;
 }
 
-.direct-steps li {
+.app-steps li {
   min-width: 0;
   padding: 10px 0;
   border-top: 1px solid var(--line);
   color: var(--muted);
 }
 
-.direct-steps strong,
-.direct-steps span {
+.app-steps strong,
+.app-steps span {
   display: block;
 }
 
-.direct-steps strong {
+.app-steps strong {
   color: var(--ink);
-}
-
-.command-panel {
-  display: grid;
-  gap: 8px;
-}
-
-.command-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.command-panel pre {
-  margin: 0;
-  padding: 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #0f172a;
-  color: #e2e8f0;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.command-panel code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: .86rem;
-}
-
-.direct-note {
-  min-height: 1.35em;
-  margin-bottom: 0;
-  color: var(--muted);
-  font-size: .9rem;
 }
 
 .input-head {
@@ -523,8 +509,8 @@ footer a {
   }
 
   .scan-grid,
-  .direct-grid,
-  .direct-steps,
+  .app-grid,
+  .app-steps,
   .summary-strip,
   .results-layout,
   .docs-grid {

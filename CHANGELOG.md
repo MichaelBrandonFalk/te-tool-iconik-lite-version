@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.5
+
+- Added the plug-and-play macOS desktop app with Settings, saved AWS/Iconik credentials, hidden secret fields, paste-and-scan workflow, result table, check details, and XLSX output.
+- Updated the public page to make the Mac app the primary path and removed the Terminal command-builder workflow.
+- Fixed S3 target handling so bucket paths, folder paths, and exact file paths are handled distinctly.
+- Carried forward the SVOD frame-rate rule where `23.98` and `29.97` pass.
+
 ## V1.4
 
 - Made the public page much clearer about the split between browser-only metadata checks and direct S3/Iconik scans.

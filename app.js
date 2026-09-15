@@ -6,14 +6,8 @@
     selectedId: null,
   };
 
-  const DEFAULT_DIRECT_TARGET = "s3://gacm-deliver-vod/";
-
   const els = {
-    directPanel: document.querySelector(".direct-panel"),
-    directTarget: document.getElementById("direct-target"),
-    directCommand: document.getElementById("direct-command"),
-    copyCommand: document.getElementById("copy-command"),
-    directModeNote: document.getElementById("direct-mode-note"),
+    appPanel: document.querySelector(".app-panel"),
     fileInput: document.getElementById("file-input"),
     folderInput: document.getElementById("folder-input"),
     pickButton: document.getElementById("pick-button"),
@@ -37,8 +31,6 @@
     exportJson: document.getElementById("export-json"),
   };
 
-  els.directTarget.addEventListener("input", renderDirectCommand);
-  els.copyCommand.addEventListener("click", copyDirectCommand);
   els.pickButton.addEventListener("click", () => els.fileInput.click());
   els.folderButton.addEventListener("click", () => els.folderInput.click());
   els.fileInput.addEventListener("change", () => runFiles([...els.fileInput.files], true));
@@ -90,14 +82,14 @@
     const labelTarget = detectDirectTarget(els.prefixInput.value);
     if (!text) {
       if (labelTarget) {
-        adoptDirectTarget(labelTarget, "That field is only a report label. I moved the S3/Iconik target to the Direct S3/Iconik Scan command builder above.");
+        flagDesktopTarget("That field is only a report label. Download the Mac app above and paste the S3/Iconik target there.");
         return;
       }
       setStatus("Paste an Iconik metadata block or drop metadata text files.");
       return;
     }
     if (isOnlyDirectTarget(text)) {
-      adoptDirectTarget(detectDirectTarget(text), "That looks like an S3/Iconik target, not metadata text. Use the generated local-scanner command above.");
+      flagDesktopTarget("That looks like an S3/Iconik target, not metadata text. Download the Mac app above and paste the target there.");
       return;
     }
     const result = TeIconikLite.evaluateMetadata(text, "Pasted metadata", els.prefixInput.value.trim());
@@ -117,45 +109,24 @@
     setStatus("Ready for Iconik metadata.");
   }
 
-  function renderDirectCommand() {
-    const target = els.directTarget.value.trim() || DEFAULT_DIRECT_TARGET;
-    els.directCommand.textContent = buildScannerCommand(target);
-    els.directModeNote.textContent = /^s3:\/\//i.test(target)
-      ? "S3 scans create the base inventory first, then match each video object to Iconik metadata."
-      : "Iconik links scan the collection or asset through the Iconik API, then write the XLSX report.";
-  }
-
-  async function copyDirectCommand() {
-    const text = els.directCommand.textContent;
-    try {
-      await navigator.clipboard.writeText(text);
-      els.directModeNote.textContent = "Command copied. Paste it into Terminal from the unzipped V1.4 folder.";
-    } catch {
-      els.directModeNote.textContent = "Clipboard access was blocked. Select the command text and copy it manually.";
-    }
-  }
-
   function handleLabelInput() {
     const target = detectDirectTarget(els.prefixInput.value);
     if (!target) return;
     els.prefixInput.value = "";
-    adoptDirectTarget(target, "That field is only a label for metadata exports. I copied the S3/Iconik target into the direct-scan command builder above.");
+    flagDesktopTarget("That field is only a label for metadata exports. Download the Mac app above and paste the S3/Iconik target there.");
   }
 
   function handlePasteInput() {
     const text = els.pasteInput.value.trim();
     if (!isOnlyDirectTarget(text)) return;
     els.pasteInput.value = "";
-    adoptDirectTarget(detectDirectTarget(text), "That looks like an S3/Iconik target. The browser page cannot scan it directly, so I built the local-scanner command above.");
+    flagDesktopTarget("That looks like an S3/Iconik target. The browser metadata checker cannot scan it, but the Mac app above can.");
   }
 
-  function adoptDirectTarget(target, message) {
-    if (!target) return;
-    els.directTarget.value = target;
-    renderDirectCommand();
+  function flagDesktopTarget(message) {
     setStatus(message);
-    els.directPanel.classList.add("is-highlighted");
-    window.setTimeout(() => els.directPanel.classList.remove("is-highlighted"), 1800);
+    els.appPanel.classList.add("is-highlighted");
+    window.setTimeout(() => els.appPanel.classList.remove("is-highlighted"), 1800);
   }
 
   function isOnlyDirectTarget(text) {
@@ -171,24 +142,6 @@
     const match = text.match(/s3:\/\/[^\s"'<>]+/i)
       || text.match(/https:\/\/app\.iconik\.io\/(?:collection|asset)\/[a-z0-9-]+/i);
     return match ? match[0].replace(/[),.;]+$/, "") : "";
-  }
-
-  function buildScannerCommand(target) {
-    const quotedTarget = quoteForShell(target || DEFAULT_DIRECT_TARGET);
-    const lines = [
-      "python3 -m pip install -r requirements.txt",
-      'export ICONIK_APP_ID="your-app-id"',
-      'export ICONIK_AUTH_TOKEN="your-auth-token"',
-    ];
-    if (/^s3:\/\//i.test(target)) {
-      lines.push("# Make sure AWS credentials can read this bucket or prefix.");
-    }
-    lines.push(`python3 te_iconik_scanner.py ${quotedTarget} -o te_iconik_lite_report.xlsx`);
-    return lines.join("\n");
-  }
-
-  function quoteForShell(value) {
-    return `"${String(value).replace(/(["\\$`])/g, "\\$1")}"`;
   }
 
   function render() {
@@ -265,11 +218,11 @@
   }
 
   function exportCsv() {
-    download("te_tool_iconik_lite_results_v1_4.csv", TeIconikLite.toCsv(state.results), "text/csv");
+    download("te_tool_iconik_lite_results_v1_5.csv", TeIconikLite.toCsv(state.results), "text/csv");
   }
 
   function exportJson() {
-    download("te_tool_iconik_lite_results_v1_4.json", JSON.stringify(state.results, null, 2), "application/json");
+    download("te_tool_iconik_lite_results_v1_5.json", JSON.stringify(state.results, null, 2), "application/json");
   }
 
   function download(name, content, type) {
@@ -302,6 +255,5 @@
     return escapeHtml(value).replace(/`/g, "&#96;");
   }
 
-  renderDirectCommand();
   render();
 })();

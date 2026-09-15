@@ -7,6 +7,20 @@ import te_iconik_scanner as scanner
 
 
 class ScannerTests(unittest.TestCase):
+    def test_parse_s3_folder_and_file_targets(self):
+        self.assertEqual(
+            scanner.parse_target("s3://gacm-deliver-vod/"),
+            ("s3", "s3://gacm-deliver-vod/"),
+        )
+        self.assertEqual(
+            scanner.parse_target("s3://gacm-axinom-staging/series/the_real_mccoys_1974776387798/"),
+            ("s3", "s3://gacm-axinom-staging/series/the_real_mccoys_1974776387798"),
+        )
+        self.assertEqual(
+            scanner.parse_target("s3://gacm-deliver-vod/movie/title.mov"),
+            ("s3", "s3://gacm-deliver-vod/movie/title.mov"),
+        )
+
     def test_evaluate_record_pass_fail(self):
         asset = {"id": "asset-1", "title": "Test"}
         fobj = {

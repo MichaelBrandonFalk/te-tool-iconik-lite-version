@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>TE Tool - Iconik Lite Version V1.4</title>
+    <title>TE Tool - Iconik Lite Version V1.5</title>
     <meta name="description" content="Lite SVOD metadata checker for Iconik MediaInfo exports from S3-hosted titles.">
     <link rel="icon" type="image/png" href="assets/te-tool-iconik-lite.png">
     <link rel="apple-touch-icon" href="assets/te-tool-iconik-lite.png">
@@ -16,41 +16,38 @@
         <div class="brand-lockup">
           <img class="brand-icon" src="assets/te-tool-iconik-lite.png" alt="">
           <div>
-            <p class="eyebrow">SVOD metadata checker <span data-version>V1.4</span></p>
+            <p class="eyebrow">SVOD metadata checker <span data-version>V1.5</span></p>
             <h1>TE Tool - Iconik Lite Version</h1>
           </div>
         </div>
-        <a class="button-link" href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.4/TE.Tool.Iconik.Lite.Version.V1_4.zip">Download V1.4</a>
+        <a class="button-link" href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.5/TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip">Download App V1.5</a>
       </header>
 
       <main class="workspace">
-        <section class="direct-panel" aria-labelledby="direct-scan-title">
-          <div class="direct-grid">
+        <section class="app-panel" aria-labelledby="download-app-title">
+          <div class="app-grid">
             <div>
-              <p class="eyebrow eyebrow-dark">Direct S3/Iconik Scan</p>
-              <h2 id="direct-scan-title">Paste the S3 folder or Iconik link here first</h2>
-              <p class="direct-lede">The public website cannot log in to S3 or Iconik from GitHub Pages. For a whole bucket, folder, or collection, download V1.4 and run the local scanner on your Mac; this page builds the Terminal command for the target you paste.</p>
+              <p class="eyebrow eyebrow-dark">Desktop scanner V1.5</p>
+              <h2 id="download-app-title">Download the plug-and-play Mac app</h2>
+              <p class="app-lede">The desktop app is the main tool: open it, save AWS and Iconik credentials in Settings, paste an S3 bucket, folder, file path, or Iconik link, then click Scan. It lists each video, retrieves Iconik metadata when available, applies the SVOD checks, and writes the pastel-coded XLSX report.</p>
+              <a class="button-link app-download" href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.5/TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip">Download Mac App V1.5</a>
             </div>
-            <label class="field direct-target-field">
-              <span>S3 prefix or Iconik link</span>
-              <input id="direct-target" type="text" placeholder="s3://gacm-deliver-vod/">
-            </label>
+            <div class="supported-panel">
+              <strong>Supported scan targets</strong>
+              <ul>
+                <li><code>s3://gacm-deliver-vod/</code></li>
+                <li><code>s3://bucket/folder/title.mov</code></li>
+                <li>Iconik collection links</li>
+                <li>Iconik asset links or asset UUIDs</li>
+              </ul>
+            </div>
           </div>
 
-          <ol class="direct-steps">
-            <li><strong>Download V1.4</strong><span>Unzip it and open Terminal in the unzipped folder.</span></li>
-            <li><strong>Add credentials</strong><span>Set Iconik credentials. S3 targets also need local AWS credentials that can read the bucket.</span></li>
-            <li><strong>Run the command</strong><span>The scanner writes a pastel-coded XLSX report with movie files, upload dates, checks, and PASS/WARNING/FAIL on the far left.</span></li>
+          <ol class="app-steps">
+            <li><strong>Open the app</strong><span>Unzip the download and double-click the app.</span></li>
+            <li><strong>Save Settings</strong><span>Add AWS credentials for S3 scans and Iconik credentials for metadata checks. Secrets are hidden by default.</span></li>
+            <li><strong>Paste and scan</strong><span>Paste a bucket, folder, file, collection, or asset link and get PASS/WARNING/FAIL results plus XLSX output.</span></li>
           </ol>
-
-          <div class="command-panel">
-            <div class="command-head">
-              <strong>Terminal command</strong>
-              <button id="copy-command" class="secondary-action" type="button">Copy Command</button>
-            </div>
-            <pre><code id="direct-command"></code></pre>
-            <p id="direct-mode-note" class="direct-note"></p>
-          </div>
         </section>
 
         <section class="input-panel" aria-label="Browser metadata checker">
@@ -81,7 +78,7 @@
           </div>
 
           <div class="bucket-note">
-            This section only scans metadata text you already exported. If you paste an S3 path or Iconik link here, the page will move it to the Direct S3/Iconik Scan command builder above.
+            This section only scans metadata text you already exported. For S3 or Iconik links, download the Mac app above and paste the target there.
           </div>
 
           <label class="paste-wrap">
@@ -161,7 +158,7 @@
 
         <section class="docs-grid">
           <div>
-            <h2>V1.4 SVOD Checks</h2>
+            <h2>V1.5 SVOD Checks</h2>
             <p>This lite version follows the metadata-visible TE Tool SVOD checks: lowercase .mov, codec tag apch, video bit rate at least 145 Mb/s, 1920x1080, 16:9, frame rate rounded to 23.98 or 29.97 fps, 4:2:2 chroma, progressive scan, PCM audio, expected PCM bit rate, 48 kHz, and 24-bit audio. Checks that require sampling media are skipped.</p>
           </div>
           <div>
@@ -172,7 +169,7 @@
       </main>
 
       <footer>
-        TE Tool - Iconik Lite Version V1.4. Source and releases are published at
+        TE Tool - Iconik Lite Version V1.5. Source and releases are published at
         <a href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version">github.com/MichaelBrandonFalk/te-tool-iconik-lite-version</a>.
       </footer>
     </div>
