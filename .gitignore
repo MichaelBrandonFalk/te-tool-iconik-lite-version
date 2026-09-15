@@ -2,5 +2,6 @@ build/
 dist/
 .venv-build-*/
 .DS_Store
+.playwright-cli/
 __pycache__/
 tests/__pycache__/

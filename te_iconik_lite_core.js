@@ -8,12 +8,13 @@
     {
       id: "file_type",
       label: "File type",
-      target: ".mov",
+      target: ".mov; .mp4 warning",
       evaluate: (m) => {
         const ext = cleanExtension(first(m, ["general.file extension", "summary.format extension", "file extension"]));
-        return ext === "mov"
-          ? pass(ext || ".mov")
-          : fail(ext || "missing", "Expected .mov file extension.");
+        if (!ext) return missing("missing", "File extension was not available.");
+        if (ext === "mov") return pass(ext);
+        if (ext === "mp4") return warn(ext, "MP4 is accepted as a warning for SVOD review.");
+        return fail(ext, "Expected .mov file extension. MP4 is a warning.");
       },
     },
     {
@@ -21,9 +22,11 @@
       label: "Video codec",
       target: "ProRes 422 HQ / apch",
       evaluate: (m) => {
-        const codecId = lower(first(m, ["video.codec id", "video.codec_tag_string", "codec id", "codec_tag_string"]));
-        const ok = codecId === "apch";
-        return ok ? pass(displayCodec(m)) : fail(displayCodec(m), "Expected ProRes 422 HQ.");
+        const codecId = lower(first(m, ["video.codec id", "video.codec_tag_string", "codec id", "codec_tag_string", "video codec"]));
+        const display = displayCodec(m);
+        if (!codecId && display === "missing") return missing("missing", "Video codec was not available.");
+        const ok = codecId === "apch" || lower(display).includes("prores");
+        return ok ? pass(display) : fail(display, "Expected ProRes 422 HQ.");
       },
     },
     {
@@ -31,9 +34,9 @@
       label: "Video bit rate",
       target: ">= 145 Mb/s",
       evaluate: (m) => {
-        const raw = first(m, ["video.bit rate", "overall bit rate"]);
+        const raw = first(m, ["video.bit rate", "video bitrate", "overall bit rate"]);
         const value = parseNumber(raw);
-        if (!Number.isFinite(value)) return fail("missing", "Video bit rate was not available.");
+        if (!Number.isFinite(value)) return missing("missing", "Video bit rate was not available.");
         return value >= MIN_VIDEO_BITRATE
           ? pass(formatMbps(value))
           : fail(formatMbps(value), "Expected at least 145 Mb/s.");
@@ -46,8 +49,12 @@
       evaluate: (m) => {
         const width = parseNumber(first(m, ["video.width", "width"]));
         const height = parseNumber(first(m, ["video.height", "height"]));
-        const value = width && height ? `${width}x${height}` : "missing";
-        return width === 1920 && height === 1080
+        const parsed = !width || !height ? parseResolution(first(m, ["video.resolution", "video resolution", "resolution"])) : null;
+        const finalWidth = width || (parsed ? parsed[0] : NaN);
+        const finalHeight = height || (parsed ? parsed[1] : NaN);
+        if (!Number.isFinite(finalWidth) || !Number.isFinite(finalHeight)) return missing("missing", "Resolution was not available.");
+        const value = `${finalWidth}x${finalHeight}`;
+        return finalWidth === 1920 && finalHeight === 1080
           ? pass(value)
           : fail(value, "Expected exactly 1920x1080.");
       },
@@ -60,8 +67,12 @@
         const raw = first(m, ["video.display aspect ratio string", "video.display aspect ratio", "display aspect ratio"]);
         const width = parseNumber(first(m, ["video.width", "width"]));
         const height = parseNumber(first(m, ["video.height", "height"]));
+        const parsed = !width || !height ? parseResolution(first(m, ["video.resolution", "video resolution", "resolution"])) : null;
+        const finalWidth = width || (parsed ? parsed[0] : NaN);
+        const finalHeight = height || (parsed ? parsed[1] : NaN);
         const ratio = parseRatio(raw);
-        const calculated = width && height ? width / height : NaN;
+        const calculated = finalWidth && finalHeight ? finalWidth / finalHeight : NaN;
+        if (!raw && !Number.isFinite(calculated)) return missing("missing", "Aspect ratio or resolution was not available.");
         const ok = raw === "16:9" || within(ratio, 1.76, 1.79) || within(calculated, 1.76, 1.79);
         return ok ? pass(raw || calculated.toFixed(3)) : fail(raw || "missing", "Expected 16:9.");
       },
@@ -71,8 +82,8 @@
       label: "Frame rate",
       target: "23.98 or 29.97 fps",
       evaluate: (m) => {
-        const value = parseFrameRate(first(m, ["video.r_frame_rate", "r_frame_rate", "video.frame rate", "frame rate", "video.frame rate string"]));
-        if (!Number.isFinite(value)) return fail("missing", "Frame rate was not available.");
+        const value = parseFrameRate(first(m, ["video.r_frame_rate", "r_frame_rate", "video.frame rate", "video framerate", "frame rate", "video.frame rate string"]));
+        if (!Number.isFinite(value)) return missing("missing", "Frame rate was not available.");
         const rounded = roundFrameRate(value);
         if (rounded === "23.98" || rounded === "29.97") return pass(`${rounded} fps`);
         return fail(`${rounded} fps`, "Expected 23.98 or 29.97 fps for SVOD.");
@@ -83,7 +94,8 @@
       label: "Chroma sampling",
       target: "4:2:2",
       evaluate: (m) => {
-        const value = first(m, ["video.chroma subsampling", "video.chroma subsampling string", "video.pixel format", "video.pix_fmt"]);
+        const value = first(m, ["video.chroma subsampling", "video chroma subsampling", "video.chroma subsampling string", "video.pixel format", "video.pix_fmt"]);
+        if (!value) return missing("missing", "Chroma sampling was not available.");
         const ok = lower(value).includes("4:2:2") || lower(value).startsWith("yuv422");
         return ok ? pass(value) : fail(value || "missing", "Expected 4:2:2 chroma.");
       },
@@ -93,7 +105,8 @@
       label: "Scan type",
       target: "Progressive",
       evaluate: (m) => {
-        const value = first(m, ["video.scan type", "video.scan type string", "video.field_order"]);
+        const value = first(m, ["video.scan type", "video scan type", "video.scan type string", "video.field_order"]);
+        if (!value) return missing("missing", "Scan type was not available.");
         return lower(value) === "progressive"
           ? pass(value)
           : fail(value || "missing", "Expected progressive scan.");
@@ -104,7 +117,8 @@
       label: "Audio codec",
       target: "PCM",
       evaluate: (m) => {
-        const value = first(m, ["audio.format", "audio.commercial name", "audio codecs", "audio format list"]);
+        const value = first(m, ["audio.codec", "audio.format", "audio.commercial name", "audio codecs", "audio format list", "audio codec"]);
+        if (!value) return missing("missing", "Audio codec was not available.");
         return lower(value).startsWith("pcm") || lower(value).includes("pcm")
           ? pass(value)
           : fail(value || "missing", "Expected PCM audio.");
@@ -115,9 +129,9 @@
       label: "Audio bit rate",
       target: "channels x 1,152 kb/s",
       evaluate: (m) => {
-        const channels = parseNumber(first(m, ["audio.channel s", "audio.channels", "audio channels total"]));
-        const bitrate = parseNumber(first(m, ["audio.bit rate"]));
-        if (!Number.isFinite(channels) || !Number.isFinite(bitrate)) return fail("missing", "Audio channels or bit rate was not available.");
+        const channels = parseNumber(first(m, ["audio.channel s", "audio.channels", "audio channels", "audio channels total"]));
+        const bitrate = parseNumber(first(m, ["audio.bit rate", "audio bit rate"]));
+        if (!Number.isFinite(channels) || !Number.isFinite(bitrate)) return missing("missing", "Audio channels or bit rate was not available.");
         const expected = channels * 1152000;
         return bitrate === expected
           ? pass(formatKbps(bitrate))
@@ -129,7 +143,8 @@
       label: "Audio sample rate",
       target: "48 kHz",
       evaluate: (m) => {
-        const value = parseNumber(first(m, ["audio.sampling rate", "audio.sample rate"]));
+        const value = parseNumber(first(m, ["audio.sampling rate", "audio sample rate", "audio.sample rate"]));
+        if (!Number.isFinite(value)) return missing("missing", "Audio sample rate was not available.");
         return value === 48000
           ? pass("48 kHz")
           : fail(value ? `${value} Hz` : "missing", "Expected 48000 Hz.");
@@ -140,7 +155,8 @@
       label: "Audio bit depth",
       target: "24-bit",
       evaluate: (m) => {
-        const value = parseNumber(first(m, ["audio.bit depth"]));
+        const value = parseNumber(first(m, ["audio.bit depth", "audio bit depth"]));
+        if (!Number.isFinite(value)) return missing("missing", "Audio bit depth was not available.");
         return value === 24
           ? pass("24 bits")
           : fail(value ? `${value} bits` : "missing", "Expected 24-bit PCM.");
@@ -152,7 +168,8 @@
       target: "1 stream, 2 channels",
       evaluate: (m) => {
         const streams = parseNumber(first(m, ["general.count of audio streams", "count of audio streams"]));
-        const channels = parseNumber(first(m, ["audio.channel s", "audio.channels", "audio channels total"]));
+        const channels = parseNumber(first(m, ["audio.channel s", "audio.channels", "audio channels", "audio channels total"]));
+        if (!Number.isFinite(channels)) return missing("missing", "Audio channel count was not available.");
         const streamOk = streams === 1 || !Number.isFinite(streams);
         const channelOk = channels === 2;
         if (streamOk && channelOk) return pass(`${streams || 1} stream, ${channels} channels`);
@@ -166,6 +183,7 @@
       evaluate: (m) => {
         const value = first(m, ["general.tim", "tim", "timecode", "general.timecode"]);
         const normalized = String(value || "").trim();
+        if (!normalized) return missing("missing", "Start timecode was not available.");
         const ok = normalized === "00:00:00:00" || normalized === "00;00;00;00";
         return ok ? pass(normalized) : fail(normalized || "missing", "Expected SVOD start timecode at zero.");
       },
@@ -222,7 +240,7 @@
     const checks = CHECKS.map((check) => ({ id: check.id, label: check.label, target: check.target, ...check.evaluate(parsed.flat) }));
     const infoChecks = INFO_CHECKS.map((check) => ({ id: check.id, label: check.label, target: check.target, ...check.evaluate(parsed.flat) }));
     const counts = tally(checks);
-    const verdict = counts.fail > 0 ? "FAIL" : counts.warn > 0 ? "WARN" : "PASS";
+    const verdict = counts.fail > 0 ? "FAIL" : counts.missing > 0 ? "MISSING INFO" : counts.warn > 0 ? "WARN" : "PASS";
     return { ...parsed, checks, infoChecks, counts, verdict, version: VERSION };
   }
 
@@ -230,7 +248,7 @@
     return checks.reduce((acc, check) => {
       acc[check.status] = (acc[check.status] || 0) + 1;
       return acc;
-    }, { pass: 0, fail: 0, warn: 0, info: 0 });
+    }, { pass: 0, fail: 0, warn: 0, missing: 0, info: 0 });
   }
 
   function splitKeyValue(line) {
@@ -258,6 +276,7 @@
     return String(key || "")
       .trim()
       .toLowerCase()
+      .replace(/_/g, " ")
       .replace(/\s+/g, " ");
   }
 
@@ -294,6 +313,11 @@
     return number ? Number(number[0]) : NaN;
   }
 
+  function parseResolution(value) {
+    const match = String(value || "").replace(/\s+/g, "").toLowerCase().match(/(\d{3,5})[x×](\d{3,5})/);
+    return match ? [Number(match[1]), Number(match[2])] : null;
+  }
+
   function within(value, min, max) {
     return Number.isFinite(value) && value > min && value < max;
   }
@@ -310,7 +334,7 @@
   }
 
   function displayCodec(m) {
-    const format = first(m, ["video.format", "video.commercial name", "video format list"]) || "missing";
+    const format = first(m, ["video.codec", "video codec", "video.format", "video.commercial name", "video format list", "codec"]) || "missing";
     const profile = first(m, ["video.format profile"]);
     const codecId = first(m, ["video.codec id"]);
     return [format, profile, codecId ? `(${codecId})` : ""].filter(Boolean).join(" ");
@@ -338,6 +362,10 @@
 
   function warn(value, note = "") {
     return { status: "warn", value, note };
+  }
+
+  function missing(value, note = "") {
+    return { status: "missing", value, note };
   }
 
   function info(value, note = "") {

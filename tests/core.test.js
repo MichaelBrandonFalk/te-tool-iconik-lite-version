@@ -35,6 +35,11 @@ Sampling rate\t48000`;
 const svod2997Pass = svodPass.replace(/Frame rate\t23\.976/g, "Frame rate\t29.970");
 const svodFail = svodPass.replace("Width\t1920", "Width\t1280").replace("Bit rate\t172557886", "Bit rate\t120000000");
 const svodBadFrame = svodPass.replace(/Frame rate\t23\.976/g, "Frame rate\t23.964");
+const svodMp4Warn = svodPass.replace("File extension\tmov", "File extension\tmp4");
+const svodMissing = `GENERAL
+File extension\tmov
+VIDEO
+Format\tProRes`;
 
 const passResult = core.evaluateMetadata(svodPass, "pass.txt");
 assert.strictEqual(passResult.verdict, "PASS");
@@ -53,6 +58,14 @@ assert.ok(failResult.checks.some((check) => check.id === "video_bitrate" && chec
 const badFrameResult = core.evaluateMetadata(svodBadFrame, "bad-frame.txt");
 assert.strictEqual(badFrameResult.verdict, "FAIL");
 assert.ok(badFrameResult.checks.some((check) => check.id === "frame_rate" && check.status === "fail" && check.value === "23.96 fps"));
+
+const mp4Result = core.evaluateMetadata(svodMp4Warn, "mp4.txt");
+assert.strictEqual(mp4Result.verdict, "WARN");
+assert.ok(mp4Result.checks.some((check) => check.id === "file_type" && check.status === "warn"));
+
+const missingResult = core.evaluateMetadata(svodMissing, "missing.txt");
+assert.strictEqual(missingResult.verdict, "MISSING INFO");
+assert.ok(missingResult.counts.missing > 0);
 
 const csv = core.toCsv([passResult]);
 assert.ok(csv.includes("PUR0003995"));

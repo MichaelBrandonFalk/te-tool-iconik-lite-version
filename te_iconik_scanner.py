@@ -22,7 +22,7 @@ import urllib.request
 import uuid
 import zipfile
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from xml.sax.saxutils import escape
 
 
@@ -35,12 +35,13 @@ S3_RE = re.compile(r"^s3://([^/]+)(?:/(.*))?$", re.I)
 PASS_FILL = "DDEFD9"
 WARN_FILL = "F8E7B8"
 FAIL_FILL = "E8DDF3"
+MISSING_FILL = "DCEAF7"
 INFO_FILL = "EAF0F6"
 HEADER_FILL = "D9EAF1"
 
 
 CHECK_DEFS = [
-    ("file_type", "File type", ".mov"),
+    ("file_type", "File type", ".mov; .mp4 warning"),
     ("video_codec", "Video codec", "ProRes 422 HQ / apch"),
     ("video_bitrate", "Video bit rate", ">= 145 Mb/s"),
     ("resolution", "Resolution", "1920x1080"),
@@ -55,6 +56,13 @@ CHECK_DEFS = [
     ("stereo_only", "Stereo only", "1 stream, 2 channels"),
     ("timecode_start", "Timecode start", "00:00:00:00 or 00;00;00;00"),
 ]
+
+ProgressCallback = Optional[Callable[[str], None]]
+ControlCallback = Optional[Callable[[], bool]]
+
+
+class ScanStopped(RuntimeError):
+    """Raised when a desktop user stops an active scan."""
 
 
 @dataclass
@@ -102,6 +110,7 @@ class IconikClient:
         self.app_id = app_id.strip()
         self.auth_token = auth_token.strip()
         self.timeout = timeout
+        self._formats_cache: Dict[str, List[Dict[str, Any]]] = {}
 
     def request(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
         url = path if path.startswith("http") else f"{self.host}{path}"
@@ -157,6 +166,11 @@ class IconikClient:
 
     def list_files(self, asset_id: str) -> List[Dict[str, Any]]:
         return self.paged_get(f"/API/files/v1/assets/{quote(asset_id)}/files/?page=1&per_page=100")
+
+    def list_formats(self, asset_id: str) -> List[Dict[str, Any]]:
+        if asset_id not in self._formats_cache:
+            self._formats_cache[asset_id] = self.paged_get(f"/API/files/v1/assets/{quote(asset_id)}/formats/?page=1&per_page=100")
+        return self._formats_cache[asset_id]
 
     def collection_contents(self, collection_id: str) -> List[Dict[str, Any]]:
         return self.paged_get(f"/API/assets/v1/collections/{quote(collection_id)}/contents/?page=1&per_page=100")
@@ -223,27 +237,40 @@ def parse_target(value: str) -> Tuple[str, str]:
     raise ValueError("Expected an Iconik collection/asset link or an s3:// URI.")
 
 
-def scan_target(client: IconikClient, target: str, limit: int = 0) -> List[ScanRow]:
+def scan_target(
+    client: IconikClient,
+    target: str,
+    limit: int = 0,
+    progress: ProgressCallback = None,
+    control: ControlCallback = None,
+) -> List[ScanRow]:
     target_type, target_id = parse_target(target)
     if target_type == "collection":
+        report_progress(progress, "Listing Iconik collection contents...")
         asset_ids = collection_asset_ids(client, target_id)
     elif target_type == "asset":
         asset_ids = [target_id]
     else:
+        report_progress(progress, "Building S3 inventory...")
         inventory = list_s3_inventory_if_available(target_id)
         if inventory:
-            return scan_s3_inventory(client, inventory, limit=limit)
+            report_progress(progress, f"Found {len(inventory)} S3 object(s). Matching videos to Iconik metadata...")
+            return scan_s3_inventory(client, inventory, limit=limit, progress=progress, control=control)
         asset_ids = s3_asset_ids(client, target_id)
 
     rows: List[ScanRow] = []
     seen_files = set()
-    for asset_id in asset_ids:
+    total_assets = len(asset_ids)
+    for asset_index, asset_id in enumerate(asset_ids, start=1):
+        check_control(control)
         asset = client.get_asset(asset_id)
         title = str(asset.get("title") or asset.get("name") or asset_id)
+        report_progress(progress, f"Scanning asset {asset_index}/{total_assets}: {title}")
         for fobj in client.list_files(asset_id):
             file_name = str(fobj.get("filename") or fobj.get("name") or fobj.get("original_name") or "")
             if not is_video_file(file_name):
                 continue
+            fobj = enrich_file_with_format_metadata(client, asset_id, fobj)
             s3_uri = best_s3_uri(fobj)
             file_key = (asset_id, str(fobj.get("id") or fobj.get("file_id") or file_name), s3_uri)
             if file_key in seen_files:
@@ -269,17 +296,26 @@ def scan_target(client: IconikClient, target: str, limit: int = 0) -> List[ScanR
     return rows
 
 
-def scan_s3_inventory(client: IconikClient, inventory: Sequence[S3InventoryObject], limit: int = 0) -> List[ScanRow]:
+def scan_s3_inventory(
+    client: IconikClient,
+    inventory: Sequence[S3InventoryObject],
+    limit: int = 0,
+    progress: ProgressCallback = None,
+    control: ControlCallback = None,
+) -> List[ScanRow]:
     rows: List[ScanRow] = []
-    for item in inventory:
-        if not is_video_file(item.file_name):
-            continue
+    video_items = [item for item in inventory if is_video_file(item.file_name)]
+    total = len(video_items)
+    for index, item in enumerate(video_items, start=1):
+        check_control(control)
+        report_progress(progress, f"Checking video {index}/{total}: {item.file_name}")
         match = find_iconik_asset_for_s3_object(client, item)
         if not match:
             rows.append(unmatched_s3_row(item))
         else:
             asset_id, asset, fobj = match
             title = str(asset.get("title") or asset.get("name") or asset_id)
+            fobj = enrich_file_with_format_metadata(client, asset_id, fobj)
             checks = evaluate_record(asset, fobj)
             rows.append(
                 ScanRow(
@@ -297,6 +333,16 @@ def scan_s3_inventory(client: IconikClient, inventory: Sequence[S3InventoryObjec
         if limit and len(rows) >= limit:
             break
     return rows
+
+
+def report_progress(progress: ProgressCallback, message: str) -> None:
+    if progress:
+        progress(message)
+
+
+def check_control(control: ControlCallback) -> None:
+    if control and not control():
+        raise ScanStopped("Scan stopped by user.")
 
 
 def list_s3_inventory_if_available(s3_uri: str) -> List[S3InventoryObject]:
@@ -389,13 +435,45 @@ def choose_matching_file(files: Sequence[Dict[str, Any]], item: S3InventoryObjec
     return None
 
 
+def enrich_file_with_format_metadata(client: IconikClient, asset_id: str, fobj: Dict[str, Any]) -> Dict[str, Any]:
+    enriched = dict(fobj)
+    try:
+        formats = client.list_formats(asset_id)
+    except Exception:
+        return enriched
+    if not formats:
+        return enriched
+
+    format_id = str(enriched.get("format_id") or "").strip()
+    chosen: Optional[Dict[str, Any]] = None
+    if format_id:
+        for fmt in formats:
+            if str(fmt.get("id") or "") == format_id:
+                chosen = fmt
+                break
+    if chosen is None:
+        for fmt in formats:
+            if str(fmt.get("name") or "").upper() == "ORIGINAL":
+                chosen = fmt
+                break
+    if chosen is None:
+        chosen = formats[0]
+
+    enriched.setdefault("format", chosen)
+    if chosen.get("metadata") not in (None, ""):
+        enriched.setdefault("format_metadata", chosen.get("metadata"))
+    if chosen.get("components") not in (None, ""):
+        enriched.setdefault("format_components", chosen.get("components"))
+    return enriched
+
+
 def unmatched_s3_row(item: S3InventoryObject) -> ScanRow:
     checks = [
-        CheckResult(check_id, label, "fail", "Iconik metadata not found", target, "No matching Iconik asset/file metadata was found for this S3 object.")
+        CheckResult(check_id, label, "missing", "Iconik metadata not found", target, "No matching Iconik asset/file metadata was found for this S3 object.")
         for check_id, label, target in CHECK_DEFS
     ]
     return ScanRow(
-        verdict="FAIL",
+        verdict="MISSING INFO",
         asset_title="",
         asset_id="",
         iconik_url="",
@@ -501,6 +579,14 @@ def evaluate_record(asset: Dict[str, Any], fobj: Dict[str, Any]) -> List[CheckRe
 def flatten_metadata(asset: Dict[str, Any], fobj: Dict[str, Any]) -> Dict[str, Any]:
     flat: Dict[str, Any] = {}
 
+    def set_value(key: str, value: Any) -> None:
+        if value in (None, ""):
+            return
+        normalized = normalize_key(key)
+        flat[normalized] = value
+        short = normalized.split(".")[-1]
+        flat.setdefault(short, value)
+
     def visit(prefix: str, value: Any) -> None:
         if isinstance(value, dict):
             for k, v in value.items():
@@ -510,86 +596,190 @@ def flatten_metadata(asset: Dict[str, Any], fobj: Dict[str, Any]) -> Dict[str, A
             for index, item in enumerate(value):
                 visit(f"{prefix}.{index}", item)
         elif value not in (None, ""):
-            flat[prefix] = value
-            short = prefix.split(".")[-1]
-            flat.setdefault(short, value)
+            set_value(prefix, value)
+
+    def visit_components(value: Any) -> None:
+        if not isinstance(value, list):
+            return
+        for component in value:
+            if not isinstance(component, dict):
+                continue
+            ctype = lower(component.get("type") or component.get("name") or "")
+            if "video" in ctype:
+                section = "video"
+            elif "audio" in ctype:
+                section = "audio"
+            elif "general" in ctype:
+                section = "general"
+            elif "text" in ctype:
+                section = "text"
+            else:
+                section = ctype or "component"
+            metadata = component.get("metadata")
+            if isinstance(metadata, dict):
+                visit(section, metadata)
 
     visit("asset", asset)
     visit("file", fobj)
     technical = fobj.get("technical_metadata") or fobj.get("metadata") or asset.get("technical_metadata") or asset.get("metadata") or {}
     visit("", technical)
+    visit("format", fobj.get("format") or {})
+    visit("format metadata", fobj.get("format_metadata") or {})
+    visit_components(fobj.get("format_components"))
+    if isinstance(fobj.get("format"), dict):
+        visit_components(fobj["format"].get("components"))
     file_name = str(fobj.get("filename") or fobj.get("name") or fobj.get("original_name") or "")
     if file_name:
         flat.setdefault("file name", file_name)
         flat.setdefault("file extension", os.path.splitext(file_name.split("?")[0])[1].lstrip("."))
+    add_flattened_aliases(flat)
     return flat
+
+
+def add_flattened_aliases(flat: Dict[str, Any]) -> None:
+    alias_groups = {
+        "container format": ["general.format", "format"],
+        "video framerate": ["video.frame rate", "frame rate"],
+        "video.framerate": ["video.frame rate", "frame rate", "video framerate"],
+        "framerate": ["video.frame rate", "frame rate", "video framerate"],
+        "video scan type": ["video.scan type", "scan type"],
+        "video.scan": ["video.scan type", "scan type"],
+        "video chroma subsampling": ["video.chroma subsampling", "chroma subsampling"],
+        "video.chroma": ["video.chroma subsampling", "chroma subsampling"],
+        "video codec": ["video.codec", "video.format", "codec"],
+        "video bitrate": ["video.bit rate", "bit rate"],
+        "video.bitrate": ["video.bit rate", "bit rate", "video bitrate"],
+        "audio codec": ["audio.format", "audio codec"],
+        "audio channels": ["audio.channel s", "audio.channels", "channels"],
+        "audio bit depth": ["audio.bit depth", "bit depth"],
+        "audio bit rate": ["audio.bit rate", "audio bitrate"],
+        "audio.bitrate": ["audio.bit rate", "audio bitrate"],
+        "audio sample rate": ["audio.sampling rate", "sampling rate"],
+        "audio.sample rate": ["audio.sampling rate", "sampling rate", "audio sample rate"],
+    }
+    for source_key, destinations in alias_groups.items():
+        value = flat.get(source_key)
+        if value in (None, ""):
+            continue
+        for dest in destinations:
+            flat.setdefault(normalize_key(dest), value)
+
+    resolution = flat.get("video resolution") or flat.get("resolution")
+    if resolution not in (None, ""):
+        parsed = parse_resolution(str(resolution))
+        if parsed:
+            width, height = parsed
+            flat.setdefault("video.width", str(width))
+            flat.setdefault("video.height", str(height))
+            flat.setdefault("width", str(width))
+            flat.setdefault("height", str(height))
 
 
 def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) -> CheckResult:
     if check_id == "file_type":
         ext = clean_ext(first(m, ["general.file extension", "file.file extension", "file extension", "extension"]))
-        return result(check_id, label, target, "pass" if ext == "mov" else "fail", ext or "missing", "Expected .mov file extension.")
+        if not ext:
+            return missing_result(check_id, label, target, "File extension was not available.")
+        if ext == "mov":
+            return result(check_id, label, target, "pass", ext)
+        if ext == "mp4":
+            return result(check_id, label, target, "warning", ext, "MP4 is accepted as a warning for SVOD review.")
+        return result(check_id, label, target, "fail", ext, "Expected .mov file extension. MP4 is a warning.")
     if check_id == "video_codec":
-        codec = lower(first(m, ["video.codec id", "codec id", "codec_tag_string", "video.codec_tag_string"]))
-        fmt = first(m, ["video.format", "format", "codec_name", "video.codec_name", "video.commercial name"])
+        codec = lower(first(m, ["video.codec id", "codec id", "codec_tag_string", "video.codec_tag_string", "video codec"]))
+        fmt = first(m, ["video.codec", "video codec", "video.format", "codec_name", "video.codec_name", "video.commercial name", "codec", "format"])
         profile = first(m, ["video.format profile", "profile", "format profile"])
-        ok = codec == "apch"
+        if not codec and not fmt:
+            return missing_result(check_id, label, target, "Video codec was not available.")
+        ok = codec == "apch" or "prores" in lower(fmt)
         display = " ".join(x for x in [fmt or codec or "missing", profile, f"({codec})" if codec else ""] if x)
         return result(check_id, label, target, "pass" if ok else "fail", display, "Expected ProRes 422 HQ codec tag apch.")
     if check_id == "video_bitrate":
         value = parse_number(first(m, ["video.bit rate", "video.bit_rate", "bit_rate", "overall bit rate"]))
-        ok = value >= 145000000 if value is not None else False
+        if value is None:
+            return missing_result(check_id, label, target, "Video bit rate was not available.")
+        ok = value >= 145000000
         return result(check_id, label, target, "pass" if ok else "fail", format_mbps(value), "Expected at least 145 Mb/s.")
     if check_id == "resolution":
         width = parse_number(first(m, ["video.width", "width"]))
         height = parse_number(first(m, ["video.height", "height"]))
+        if width is None or height is None:
+            parsed_resolution = parse_resolution(first(m, ["video.resolution", "resolution", "video resolution"]))
+            if parsed_resolution:
+                width, height = parsed_resolution
+        if width is None or height is None:
+            return missing_result(check_id, label, target, "Resolution was not available.")
         ok = width == 1920 and height == 1080
         value = f"{width or '?'}x{height or '?'}"
         return result(check_id, label, target, "pass" if ok else "fail", value, "Expected exactly 1920x1080.")
     if check_id == "aspect_ratio":
-        raw = first(m, ["video.display aspect ratio", "display_aspect_ratio", "display aspect ratio"])
+        raw = first(m, ["video.display aspect ratio string", "video.display aspect ratio", "display_aspect_ratio", "display aspect ratio"])
         ratio = parse_ratio(raw)
         width = parse_number(first(m, ["video.width", "width"]))
         height = parse_number(first(m, ["video.height", "height"]))
+        if width is None or height is None:
+            parsed_resolution = parse_resolution(first(m, ["video.resolution", "resolution", "video resolution"]))
+            if parsed_resolution:
+                width, height = parsed_resolution
         calculated = (width / height) if width and height else None
+        if not raw and calculated is None:
+            return missing_result(check_id, label, target, "Aspect ratio or resolution was not available.")
         ok = raw == "16:9" or within(ratio, 1.76, 1.79) or within(calculated, 1.76, 1.79)
         return result(check_id, label, target, "pass" if ok else "fail", raw or (f"{calculated:.3f}" if calculated else "missing"), "Expected 16:9.")
     if check_id == "frame_rate":
-        fps = parse_frame_rate(first(m, ["video.r frame rate", "r_frame_rate", "video.frame rate", "frame_rate", "frame rate"]))
+        fps = parse_frame_rate(first(m, ["video.r frame rate", "r_frame_rate", "video.frame rate", "frame_rate", "frame rate", "video framerate"]))
         rounded = round_frame_rate(fps) if fps is not None else None
         if rounded in {"23.98", "29.97"}:
             return result(check_id, label, target, "pass", f"{rounded} fps")
+        if rounded is None:
+            return missing_result(check_id, label, target, "Frame rate was not available.")
         return result(check_id, label, target, "fail", f"{rounded} fps" if rounded is not None else "missing", "Expected 23.98 or 29.97 fps for SVOD.")
     if check_id == "chroma":
-        value = first(m, ["video.chroma subsampling", "chroma subsampling", "pix_fmt", "pixel format"])
+        value = first(m, ["video.chroma subsampling", "chroma subsampling", "video chroma subsampling", "pix_fmt", "pixel format"])
+        if not value:
+            return missing_result(check_id, label, target, "Chroma sampling was not available.")
         ok = "4:2:2" in lower(value) or lower(value).startswith("yuv422")
         return result(check_id, label, target, "pass" if ok else "fail", value or "missing", "Expected 4:2:2 chroma.")
     if check_id == "scan_type":
-        value = first(m, ["video.scan type", "scan type", "field_order", "field order"])
+        value = first(m, ["video.scan type", "scan type", "video scan type", "field_order", "field order"])
+        if not value:
+            return missing_result(check_id, label, target, "Scan type was not available.")
         return result(check_id, label, target, "pass" if lower(value) == "progressive" else "fail", value or "missing", "Expected progressive scan.")
     if check_id == "audio_codec":
-        value = first(m, ["audio.format", "audio codec", "audio codecs", "audio codec name", "audio.codec_name"])
+        value = first(m, ["audio.codec", "audio.format", "audio codec", "audio codecs", "audio codec name", "audio.codec_name"])
+        if not value:
+            return missing_result(check_id, label, target, "Audio codec was not available.")
         ok = "pcm" in lower(value)
         return result(check_id, label, target, "pass" if ok else "fail", value or "missing", "Expected PCM audio.")
     if check_id == "audio_bitrate":
         channels = parse_number(first(m, ["audio.channel s", "audio.channels", "channels", "audio channels total"]))
         bitrate = parse_number(first(m, ["audio.bit rate", "audio.bit_rate", "audio_bitrate"]))
+        if channels is None or bitrate is None:
+            return missing_result(check_id, label, target, "Audio channels or bit rate was not available.")
         expected = channels * 1152000 if channels is not None else None
         ok = bitrate is not None and expected is not None and bitrate == expected
         return result(check_id, label, target, "pass" if ok else "fail", format_kbps(bitrate), f"Expected {format_kbps(expected)} for {channels or '?'} channel(s).")
     if check_id == "audio_sample_rate":
         value = parse_number(first(m, ["audio.sampling rate", "sample_rate", "sampling rate"]))
+        if value is None:
+            return missing_result(check_id, label, target, "Audio sample rate was not available.")
         return result(check_id, label, target, "pass" if value == 48000 else "fail", "48 kHz" if value == 48000 else (f"{value} Hz" if value else "missing"), "Expected 48000 Hz.")
     if check_id == "audio_bit_depth":
         value = parse_number(first(m, ["audio.bit depth", "bits_per_sample", "bit depth"]))
+        if value is None:
+            return missing_result(check_id, label, target, "Audio bit depth was not available.")
         return result(check_id, label, target, "pass" if value == 24 else "fail", f"{value} bits" if value else "missing", "Expected 24-bit PCM.")
     if check_id == "stereo_only":
         streams = parse_number(first(m, ["general.count of audio streams", "count of audio streams", "audio_stream_count"]))
         channels = parse_number(first(m, ["audio.channel s", "audio.channels", "channels", "audio channels total"]))
+        if channels is None:
+            return missing_result(check_id, label, target, "Audio channel count was not available.")
         ok = channels == 2 and (streams in (None, 1))
         return result(check_id, label, target, "pass" if ok else "fail", f"{streams or '?'} stream, {channels or '?'} channels", "Expected one stereo audio stream.")
     if check_id == "timecode_start":
         value = first(m, ["general.tim", "tim", "timecode", "start_timecode"])
+        if not value:
+            return missing_result(check_id, label, target, "Start timecode was not available.")
         ok = value in ("00:00:00:00", "00;00;00;00")
         return result(check_id, label, target, "pass" if ok else "fail", value or "missing", "Expected SVOD start timecode at zero.")
     return result(check_id, label, target, "info", "not checked")
@@ -599,9 +789,15 @@ def result(check_id: str, label: str, target: str, status: str, value: str, note
     return CheckResult(check_id, label, status, value or "", target, "" if status == "pass" else note)
 
 
+def missing_result(check_id: str, label: str, target: str, note: str) -> CheckResult:
+    return result(check_id, label, target, "missing", "missing", note)
+
+
 def verdict_from_checks(checks: Sequence[CheckResult]) -> str:
     if any(c.status == "fail" for c in checks):
         return "FAIL"
+    if any(c.status == "missing" for c in checks):
+        return "MISSING INFO"
     if any(c.status == "warning" for c in checks):
         return "WARNING"
     return "PASS"
@@ -680,6 +876,14 @@ def parse_ratio(value: str) -> Optional[float]:
     return float(match.group(0)) if match else None
 
 
+def parse_resolution(value: str) -> Optional[Tuple[int, int]]:
+    text = str(value or "").replace(" ", "").lower()
+    match = re.search(r"(\d{3,5})[x×](\d{3,5})", text)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
 def within(value: Optional[float], low: float, high: float) -> bool:
     return value is not None and low < value < high
 
@@ -747,6 +951,7 @@ def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str) -> None:
         ["Total Videos", str(len(rows))],
         ["Pass", str(sum(1 for r in rows if r.verdict == "PASS"))],
         ["Warning", str(sum(1 for r in rows if r.verdict == "WARNING"))],
+        ["Missing Info", str(sum(1 for r in rows if r.verdict == "MISSING INFO"))],
         ["Fail", str(sum(1 for r in rows if r.verdict == "FAIL"))],
     ]
 
@@ -757,7 +962,7 @@ def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str) -> None:
         zf.writestr("xl/_rels/workbook.xml.rels", workbook_rels_xml())
         zf.writestr("xl/styles.xml", styles_xml())
         zf.writestr("xl/worksheets/sheet1.xml", worksheet_xml("Summary", summary, []))
-        zf.writestr("xl/worksheets/sheet2.xml", worksheet_xml("SVOD Report", [headers, *data_rows], ["header", *row_statuses]))
+        zf.writestr("xl/worksheets/sheet2.xml", worksheet_xml("SVOD Report", [headers, *data_rows], ["header", *[status_style_key(s) for s in row_statuses]]))
 
 
 def worksheet_xml(name: str, rows: Sequence[Sequence[str]], row_styles: Sequence[str]) -> str:
@@ -786,8 +991,13 @@ def style_index(style_name: str, c_idx: int) -> int:
     if style_name == "header":
         return 1
     if c_idx == 1:
-        return {"pass": 2, "warning": 3, "fail": 4}.get(style_name, 0)
+        return {"pass": 2, "warning": 3, "fail": 4, "missing": 5}.get(style_name, 0)
     return 0
+
+
+def status_style_key(status: str) -> str:
+    normalized = lower(status).replace(" ", "_")
+    return "missing" if normalized in ("missing", "missing_info") else normalized
 
 
 def cell_ref(row: int, col: int) -> str:
@@ -843,22 +1053,24 @@ def styles_xml() -> str:
     <font><sz val="11"/><name val="Aptos"/></font>
     <font><b/><sz val="11"/><name val="Aptos"/></font>
   </fonts>
-  <fills count="6">
+  <fills count="7">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF{HEADER_FILL}"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF{PASS_FILL}"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF{WARN_FILL}"/><bgColor indexed="64"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF{FAIL_FILL}"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF{MISSING_FILL}"/><bgColor indexed="64"/></patternFill></fill>
   </fills>
   <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="5">
+  <cellXfs count="6">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
     <xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
     <xf numFmtId="0" fontId="1" fillId="4" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
     <xf numFmtId="0" fontId="1" fillId="5" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="6" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
   </cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>"""

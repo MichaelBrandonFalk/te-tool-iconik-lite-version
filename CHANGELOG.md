@@ -3,9 +3,14 @@
 ## V1.5
 
 - Added the plug-and-play macOS desktop app with Settings, saved AWS/Iconik credentials, hidden secret fields, paste-and-scan workflow, result table, check details, and XLSX output.
+- Added an Iconik API connection test in Settings.
+- Added clearer long-run scan logging plus Pause, Resume, and Stop controls.
+- Forced the desktop app into a readable light UI with dark text on pastel PASS/WARNING/MISSING INFO/FAIL rows.
 - Updated the public page to make the Mac app the primary path and removed the Terminal command-builder workflow.
 - Fixed S3 target handling so bucket paths, folder paths, and exact file paths are handled distinctly.
+- Fixed Iconik metadata mapping for flattened report fields and format/component metadata.
 - Carried forward the SVOD frame-rate rule where `23.98` and `29.97` pass.
+- Changed `.mp4` from fail to warning and changed missing technical values to blue `MISSING INFO` instead of hard fail.
 
 ## V1.4
 

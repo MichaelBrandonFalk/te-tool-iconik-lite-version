@@ -17,10 +17,11 @@ Current public version: `V1.5`
 2. Open `TE Tool Iconik Lite Version V1_5.app`.
 3. Open Settings and save AWS credentials for S3 scans.
 4. Save Iconik App-ID/Auth-Token for Iconik links and metadata lookups.
-5. Paste an S3 bucket, folder, file path, Iconik collection link, Iconik asset link, or asset UUID.
-6. Click Scan.
+5. Click **Test Iconik** in Settings to confirm the API connection.
+6. Paste an S3 bucket, folder, file path, Iconik collection link, Iconik asset link, or asset UUID.
+7. Click Scan. Use Pause, Resume, or Stop during long bucket scans.
 
-The app lists each video, retrieves Iconik metadata when available, applies the SVOD checks, displays PASS/WARNING/FAIL results, and writes a pastel-coded XLSX report with upload date, S3/storage path, Iconik URL, and every check field.
+The app lists each video, retrieves Iconik metadata, applies the SVOD checks, displays PASS/WARNING/MISSING INFO/FAIL results, and writes a pastel-coded XLSX report with upload date, S3/storage path, Iconik URL, and every check field.
 
 ## Supported Targets
 
@@ -35,6 +36,7 @@ The app lists each video, retrieves Iconik metadata when available, applies the 
 
 - AWS credentials are used for direct S3 bucket/folder/file inventory.
 - Iconik credentials are used to retrieve asset/file metadata and to scan Iconik links.
+- Iconik credentials are required before a scan can run because TE checks depend on Iconik technical metadata.
 - In the Mac app, secrets are saved through macOS Keychain when available and hidden by default in Settings.
 - The app can use an existing AWS provider chain/profile if AWS credentials are not saved in Settings.
 
@@ -43,6 +45,7 @@ The app lists each video, retrieves Iconik metadata when available, applies the 
 V1.5 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
 - lowercase `.mov` file type, matching TE Tool's case-sensitive check
+- `.mp4` file type as a warning, not a hard fail
 - ProRes 422 HQ codec tag `apch`
 - Video bit rate at or above 145 Mb/s
 - `1920x1080` resolution
@@ -56,6 +59,8 @@ V1.5 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose wi
 - 24-bit audio
 - One stereo audio stream
 - Start timecode at `00:00:00:00` or `00;00;00;00`
+
+Missing technical values are marked `MISSING INFO` with blue/pastel styling instead of being treated as hard failures.
 
 ## What It Does Not Check
 

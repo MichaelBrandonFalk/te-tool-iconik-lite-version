@@ -10,9 +10,11 @@
   --good: #157347;
   --warn: #9a6700;
   --bad: #6d4c8d;
+  --missing: #1f6692;
   --soft-good: #eaf7f0;
   --soft-warn: #fff6db;
   --soft-bad: #f0e8f8;
+  --soft-missing: #e7f2fb;
 }
 
 * {
@@ -333,7 +335,7 @@ h3 {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr)) auto;
+  grid-template-columns: repeat(5, minmax(116px, 1fr)) auto;
   gap: 10px;
   align-items: center;
   margin-top: 16px;
@@ -441,6 +443,11 @@ tr.is-selected td {
 .pill.fail {
   color: var(--bad);
   background: var(--soft-bad);
+}
+
+.pill.missing {
+  color: var(--missing);
+  background: var(--soft-missing);
 }
 
 .pill.info {

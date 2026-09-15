@@ -25,6 +25,7 @@
     emptyState: document.getElementById("empty-state"),
     passCount: document.getElementById("pass-count"),
     warnCount: document.getElementById("warn-count"),
+    missingCount: document.getElementById("missing-count"),
     failCount: document.getElementById("fail-count"),
     titleCount: document.getElementById("title-count"),
     exportCsv: document.getElementById("export-csv"),
@@ -157,12 +158,14 @@
     const totals = state.results.reduce((acc, result) => {
       acc.pass += result.counts.pass || 0;
       acc.warn += result.counts.warn || 0;
+      acc.missing += result.counts.missing || 0;
       acc.fail += result.counts.fail || 0;
       return acc;
-    }, { pass: 0, warn: 0, fail: 0 });
+    }, { pass: 0, warn: 0, missing: 0, fail: 0 });
     els.titleCount.textContent = String(state.results.length);
     els.passCount.textContent = String(totals.pass);
     els.warnCount.textContent = String(totals.warn);
+    els.missingCount.textContent = String(totals.missing);
     els.failCount.textContent = String(totals.fail);
   }
 
@@ -174,9 +177,10 @@
       tr.className = result.sourceName === state.selectedId ? "is-selected" : "";
       tr.innerHTML = `
         <td><button class="row-button" type="button" data-id="${escapeAttr(result.sourceName)}">${escapeHtml(result.title)}</button></td>
-        <td><span class="pill ${result.verdict.toLowerCase()}">${result.verdict}</span></td>
+        <td><span class="pill ${statusClass(result.verdict)}">${result.verdict}</span></td>
         <td>${result.counts.fail || 0}</td>
         <td>${result.counts.warn || 0}</td>
+        <td>${result.counts.missing || 0}</td>
       `;
       els.resultsBody.appendChild(tr);
     }
@@ -215,6 +219,11 @@
       <td>${escapeHtml(check.note || "")}</td>
     `;
     return tr;
+  }
+
+  function statusClass(status) {
+    const normalized = String(status || "").toLowerCase().replace(/\s+/g, "-");
+    return normalized === "missing-info" ? "missing" : normalized;
   }
 
   function exportCsv() {

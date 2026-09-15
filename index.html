@@ -29,7 +29,7 @@
             <div>
               <p class="eyebrow eyebrow-dark">Desktop scanner V1.5</p>
               <h2 id="download-app-title">Download the plug-and-play Mac app</h2>
-              <p class="app-lede">The desktop app is the main tool: open it, save AWS and Iconik credentials in Settings, paste an S3 bucket, folder, file path, or Iconik link, then click Scan. It lists each video, retrieves Iconik metadata when available, applies the SVOD checks, and writes the pastel-coded XLSX report.</p>
+              <p class="app-lede">The desktop app is the main tool: open it, save AWS and Iconik credentials in Settings, use Test Iconik to confirm the API connection, paste an S3 bucket, folder, file path, or Iconik link, then click Scan. It lists each video, retrieves Iconik metadata, applies the SVOD checks, and writes the pastel-coded XLSX report.</p>
               <a class="button-link app-download" href="https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.5/TE.Tool.Iconik.Lite.Version.V1_5.macOS.Apple.Silicon.zip">Download Mac App V1.5</a>
             </div>
             <div class="supported-panel">
@@ -45,8 +45,8 @@
 
           <ol class="app-steps">
             <li><strong>Open the app</strong><span>Unzip the download and double-click the app.</span></li>
-            <li><strong>Save Settings</strong><span>Add AWS credentials for S3 scans and Iconik credentials for metadata checks. Secrets are hidden by default.</span></li>
-            <li><strong>Paste and scan</strong><span>Paste a bucket, folder, file, collection, or asset link and get PASS/WARNING/FAIL results plus XLSX output.</span></li>
+            <li><strong>Save Settings</strong><span>Add AWS credentials for S3 scans and Iconik credentials for metadata checks, then test the Iconik connection.</span></li>
+            <li><strong>Paste and scan</strong><span>Paste a bucket, folder, file, collection, or asset link and get PASS/WARNING/MISSING INFO/FAIL results plus XLSX output.</span></li>
           </ol>
         </section>
 
@@ -101,6 +101,10 @@
             <strong id="warn-count">0</strong>
           </div>
           <div class="stat">
+            <span>Missing Info</span>
+            <strong id="missing-count">0</strong>
+          </div>
+          <div class="stat">
             <span>Fails</span>
             <strong id="fail-count">0</strong>
           </div>
@@ -121,6 +125,7 @@
                     <th>Verdict</th>
                     <th>Fails</th>
                     <th>Warnings</th>
+                    <th>Missing Info</th>
                   </tr>
                 </thead>
                 <tbody id="results-body"></tbody>
@@ -159,7 +164,7 @@
         <section class="docs-grid">
           <div>
             <h2>V1.5 SVOD Checks</h2>
-            <p>This lite version follows the metadata-visible TE Tool SVOD checks: lowercase .mov, codec tag apch, video bit rate at least 145 Mb/s, 1920x1080, 16:9, frame rate rounded to 23.98 or 29.97 fps, 4:2:2 chroma, progressive scan, PCM audio, expected PCM bit rate, 48 kHz, and 24-bit audio. Checks that require sampling media are skipped.</p>
+            <p>This lite version follows the metadata-visible TE Tool SVOD checks: lowercase .mov, MP4 as warning, codec tag apch/ProRes, video bit rate at least 145 Mb/s, 1920x1080, 16:9, frame rate rounded to 23.98 or 29.97 fps, 4:2:2 chroma, progressive scan, PCM audio, expected PCM bit rate, 48 kHz, and 24-bit audio. Missing metadata is marked Missing Info instead of failed. Checks that require sampling media are skipped.</p>
           </div>
           <div>
             <h2>Whole Bucket Flow</h2>
