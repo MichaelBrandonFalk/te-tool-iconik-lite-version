@@ -1,5 +1,11 @@
 # Changelog
 
+## V1.2
+
+- Added a local Iconik/S3 scanner that accepts Iconik collection/asset links or S3 prefixes.
+- Added S3 prefix inventory support based on the S3 Organizer audit/listing pattern.
+- Added XLSX report output with pastel status colors, far-left result column, upload date, S3 path, Iconik URL, and check result fields.
+
 ## V1.1
 
 - Clarified that the S3 field is a report label, not a live S3 scanner.

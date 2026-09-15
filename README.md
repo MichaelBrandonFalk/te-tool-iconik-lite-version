@@ -4,7 +4,7 @@ TE Tool - Iconik Lite Version is a browser-first SVOD metadata checker for Iconi
 
 ## Version
 
-Current public version: `V1.1`
+Current public version: `V1.2`
 
 ## Browser App
 
@@ -18,13 +18,13 @@ The browser app runs locally in the page. Metadata text is not uploaded to a ser
 
 Download the offline browser app package:
 
-- [TE.Tool.Iconik.Lite.Version.V1_1.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.1/TE.Tool.Iconik.Lite.Version.V1_1.zip)
+- [TE.Tool.Iconik.Lite.Version.V1_2.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.2/TE.Tool.Iconik.Lite.Version.V1_2.zip)
 
 Open `index.html` from the package, or serve the folder with a small local web server.
 
 ## What It Checks
 
-V1.1 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
+V1.2 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
 - `.mov` file type
 - ProRes 422 HQ / `apch`
@@ -54,30 +54,40 @@ The full TE Tool checks some items by sampling the media with FFmpeg or by requi
 
 ## Whole Bucket Workflow
 
-The S3 field in the browser app is a report label only. It does not log in to S3 or crawl a bucket.
+V1.2 includes a local scanner for direct Iconik/S3 reports.
 
-To scan a whole bucket with the browser app:
+Use it with an Iconik collection link:
 
-1. Export or generate one Iconik/MediaInfo metadata text file per title.
-2. Put those metadata files in one folder.
-3. Open the browser app.
-4. Enter the bucket path as the batch label, such as `s3://gacm-deliver-vod/`.
-5. Click `Select Folder`.
-6. Export CSV or JSON results.
+```bash
+export ICONIK_APP_ID="your-app-id"
+export ICONIK_AUTH_TOKEN="your-auth-token"
+python3 te_iconik_scanner.py "https://app.iconik.io/collection/92690826-2270-11f1-9bc5-8ee2128f6d19" -o te_iconik_lite_report.xlsx
+```
 
-Direct S3 crawling would require a local desktop/CLI build with AWS credentials and `mediainfo` or `ffprobe`.
+Or use it with an S3 prefix:
+
+```bash
+python3 -m pip install -r requirements.txt
+export ICONIK_APP_ID="your-app-id"
+export ICONIK_AUTH_TOKEN="your-auth-token"
+python3 te_iconik_scanner.py "s3://gacm-deliver-vod/" -o te_iconik_lite_report.xlsx
+```
+
+For `s3://` targets, the scanner first builds a base S3 inventory using local AWS credentials, then matches those video objects to Iconik asset/file metadata. This uses the same kind of paginated S3 inventory approach as S3 Organizer. If direct S3 inventory is not available, it falls back to Iconik search.
+
+The browser page still supports pasted metadata, selected metadata files, and selected folders of metadata exports.
 
 ## Local Build
 
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_1.sh
+./build_te_tool_iconik_lite_v1_2.sh
 ```
 
 The script creates:
 
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_1.zip`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_2.zip`
 
 ## Versioning
 
