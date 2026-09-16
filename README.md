@@ -4,22 +4,23 @@ TE Tool - Iconik Lite Version is a plug-and-play macOS app for SVOD technical me
 
 ## Version
 
-Current public version: `V1.7`
+Current public version: `V1.8`
 
 ## Download
 
 - Public page: https://michaelbrandonfalk.github.io/te-tool-iconik-lite-version/
-- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_7.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.7/TE.Tool.Iconik.Lite.Version.V1_7.macOS.Apple.Silicon.zip)
+- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_8.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.8/TE.Tool.Iconik.Lite.Version.V1_8.macOS.Apple.Silicon.zip)
 
 ## App Workflow
 
 1. Download and unzip the Mac app.
-2. Open `TE Tool Iconik Lite Version V1_7.app`.
+2. Open `TE Tool Iconik Lite Version V1_8.app`.
 3. Open Settings and save AWS credentials for S3 scans.
 4. Save Iconik App-ID/Auth-Token for Iconik links and metadata lookups.
 5. Click **Test Iconik** in Settings to confirm the API connection.
-6. Paste an S3 bucket, folder, file path, Iconik collection link, Iconik asset link, or asset UUID.
-7. Click Scan. Use Pause, Resume, or Stop during long bucket scans.
+6. Optional: open **Edit QC Checks...** in Settings to ignore fields or adjust pass/warning/fail criteria.
+7. Paste an S3 bucket, folder, file path, Iconik collection link, Iconik asset link, or asset UUID.
+8. Click Scan. Use Pause, Resume, or Stop during long bucket scans.
 
 The app lists each video, retrieves Iconik metadata, applies the SVOD checks, displays PASS/WARNING/MISSING INFO/FAIL results, and writes a pastel-coded XLSX report with upload date, S3/storage path, Iconik URL, and every check field.
 
@@ -42,7 +43,7 @@ The app lists each video, retrieves Iconik metadata, applies the SVOD checks, di
 
 ## What It Checks
 
-V1.7 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
+V1.8 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
 - lowercase `.mov` file type, matching TE Tool's case-sensitive check
 - `.mp4` file type as a warning, not a hard fail
@@ -65,6 +66,8 @@ Missing technical values are marked `MISSING INFO` with blue/pastel styling inst
 
 The XLSX report includes a `Reason` column for non-pass rows and colors each failing, warning, or missing-info check cell with the matching pastel status color.
 
+In Settings, users can customize this shipped profile: each check can be ignored, pass/warning/fail criteria can be edited, and **Restore Check Defaults** returns the profile to the original SVOD settings.
+
 ## What It Does Not Check
 
 The full TE Tool checks some items by sampling the media with FFmpeg or by requiring visual review. Those are intentionally excluded from this lite version:
@@ -85,13 +88,13 @@ The public web page still includes a small browser-only metadata text checker. I
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_7_mac.sh
+./build_te_tool_iconik_lite_v1_8_mac.sh
 ```
 
 The script creates:
 
-- `dist/TE Tool Iconik Lite Version V1_7.app`
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_7.macOS.Apple.Silicon.zip`
+- `dist/TE Tool Iconik Lite Version V1_8.app`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_8.macOS.Apple.Silicon.zip`
 
 ## Versioning
 

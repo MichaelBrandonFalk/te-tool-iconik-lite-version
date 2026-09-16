@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.7"
+VERSION = "V1.8"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -56,6 +56,122 @@ CHECK_DEFS = [
     ("stereo_only", "Stereo only", "1 stream, 2 channels"),
     ("timecode_start", "Timecode start", "00:00:00:00 or 00;00;00;00"),
 ]
+
+DEFAULT_CHECK_PROFILE = {
+    "file_type": {
+        "enabled": True,
+        "pass": "mov",
+        "warning": "mp4",
+        "fail": "anything else",
+    },
+    "video_codec": {
+        "enabled": True,
+        "pass": "apch, prores",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "video_bitrate": {
+        "enabled": True,
+        "pass": ">= 145 Mb/s",
+        "warning": "",
+        "fail": "below pass minimum",
+    },
+    "resolution": {
+        "enabled": True,
+        "pass": "1920x1080",
+        "warning": "720x480",
+        "fail": "anything else",
+    },
+    "aspect_ratio": {
+        "enabled": True,
+        "pass": "16:9, 1.76-1.79",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "frame_rate": {
+        "enabled": True,
+        "pass": "23.98, 29.97",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "chroma": {
+        "enabled": True,
+        "pass": "4:2:2, yuv422",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "scan_type": {
+        "enabled": True,
+        "pass": "progressive",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "audio_codec": {
+        "enabled": True,
+        "pass": "pcm",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "audio_bitrate": {
+        "enabled": True,
+        "pass": "channels x 1152 kb/s",
+        "warning": "anything else",
+        "fail": "",
+    },
+    "audio_sample_rate": {
+        "enabled": True,
+        "pass": "48000 Hz",
+        "warning": "anything else",
+        "fail": "",
+    },
+    "audio_bit_depth": {
+        "enabled": True,
+        "pass": "24",
+        "warning": "anything else",
+        "fail": "",
+    },
+    "stereo_only": {
+        "enabled": True,
+        "pass": "1 stream, 2 channels",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "timecode_start": {
+        "enabled": True,
+        "pass": "00:00:00:00, 00;00;00;00",
+        "warning": "",
+        "fail": "anything else",
+    },
+}
+
+
+def default_check_profile() -> Dict[str, Dict[str, Any]]:
+    """Return a fresh copy of the shipped SVOD check profile."""
+    return json.loads(json.dumps(DEFAULT_CHECK_PROFILE))
+
+
+def normalize_check_profile(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, Any]]:
+    normalized = default_check_profile()
+    if not isinstance(profile, dict):
+        return normalized
+    valid_ids = {check_id for check_id, _, _ in CHECK_DEFS}
+    for check_id, values in profile.items():
+        if check_id not in valid_ids or not isinstance(values, dict):
+            continue
+        rule = normalized[check_id]
+        if "enabled" in values:
+            rule["enabled"] = bool(values.get("enabled"))
+        for key in ("pass", "warning", "fail"):
+            if key in values:
+                rule[key] = str(values.get(key) or "").strip()
+    return normalized
+
+
+def rule_target(rule: Dict[str, Any]) -> str:
+    pass_value = str(rule.get("pass") or "").strip() or "-"
+    warning_value = str(rule.get("warning") or "").strip() or "-"
+    fail_value = str(rule.get("fail") or "").strip() or "-"
+    return f"Pass: {pass_value}; Warning: {warning_value}; Fail: {fail_value}"
 
 ProgressCallback = Optional[Callable[[str], None]]
 ControlCallback = Optional[Callable[[], bool]]
@@ -243,7 +359,9 @@ def scan_target(
     limit: int = 0,
     progress: ProgressCallback = None,
     control: ControlCallback = None,
+    check_profile: Optional[Dict[str, Any]] = None,
 ) -> List[ScanRow]:
+    profile = normalize_check_profile(check_profile)
     target_type, target_id = parse_target(target)
     if target_type == "collection":
         report_progress(progress, "Listing Iconik collection contents...")
@@ -255,7 +373,7 @@ def scan_target(
         inventory = list_s3_inventory_if_available(target_id)
         if inventory:
             report_progress(progress, f"Found {len(inventory)} S3 object(s). Matching videos to Iconik metadata...")
-            return scan_s3_inventory(client, inventory, limit=limit, progress=progress, control=control)
+            return scan_s3_inventory(client, inventory, limit=limit, progress=progress, control=control, check_profile=profile)
         asset_ids = s3_asset_ids(client, target_id)
 
     rows: List[ScanRow] = []
@@ -276,7 +394,7 @@ def scan_target(
             if file_key in seen_files:
                 continue
             seen_files.add(file_key)
-            checks = evaluate_record(asset, fobj)
+            checks = evaluate_record(asset, fobj, profile)
             verdict = verdict_from_checks(checks)
             rows.append(
                 ScanRow(
@@ -302,7 +420,9 @@ def scan_s3_inventory(
     limit: int = 0,
     progress: ProgressCallback = None,
     control: ControlCallback = None,
+    check_profile: Optional[Dict[str, Any]] = None,
 ) -> List[ScanRow]:
+    profile = normalize_check_profile(check_profile)
     rows: List[ScanRow] = []
     video_items = [item for item in inventory if is_video_file(item.file_name)]
     total = len(video_items)
@@ -311,12 +431,12 @@ def scan_s3_inventory(
         report_progress(progress, f"Checking video {index}/{total}: {item.file_name}")
         match = find_iconik_asset_for_s3_object(client, item)
         if not match:
-            rows.append(unmatched_s3_row(item))
+            rows.append(unmatched_s3_row(item, profile))
         else:
             asset_id, asset, fobj = match
             title = str(asset.get("title") or asset.get("name") or asset_id)
             fobj = enrich_file_with_format_metadata(client, asset_id, fobj)
-            checks = evaluate_record(asset, fobj)
+            checks = evaluate_record(asset, fobj, profile)
             rows.append(
                 ScanRow(
                     verdict=verdict_from_checks(checks),
@@ -467,13 +587,27 @@ def enrich_file_with_format_metadata(client: IconikClient, asset_id: str, fobj: 
     return enriched
 
 
-def unmatched_s3_row(item: S3InventoryObject) -> ScanRow:
-    checks = [
-        CheckResult(check_id, label, "missing", "Iconik metadata not found", target, "No matching Iconik asset/file metadata was found for this S3 object.")
-        for check_id, label, target in CHECK_DEFS
-    ]
+def unmatched_s3_row(item: S3InventoryObject, check_profile: Optional[Dict[str, Any]] = None) -> ScanRow:
+    profile = normalize_check_profile(check_profile)
+    checks = []
+    for check_id, label, _target in CHECK_DEFS:
+        rule = profile[check_id]
+        target = rule_target(rule)
+        if not rule.get("enabled", True):
+            checks.append(ignored_result(check_id, label, target))
+        else:
+            checks.append(
+                CheckResult(
+                    check_id,
+                    label,
+                    "missing",
+                    "Iconik metadata not found",
+                    target,
+                    "No matching Iconik asset/file metadata was found for this S3 object.",
+                )
+            )
     return ScanRow(
-        verdict="MISSING INFO",
+        verdict=verdict_from_checks(checks),
         asset_title="",
         asset_id="",
         iconik_url="",
@@ -571,9 +705,10 @@ def presigned_to_s3(url: str) -> str:
     return url
 
 
-def evaluate_record(asset: Dict[str, Any], fobj: Dict[str, Any]) -> List[CheckResult]:
+def evaluate_record(asset: Dict[str, Any], fobj: Dict[str, Any], check_profile: Optional[Dict[str, Any]] = None) -> List[CheckResult]:
     meta = flatten_metadata(asset, fobj)
-    return [evaluate_check(check_id, label, target, meta) for check_id, label, target in CHECK_DEFS]
+    profile = normalize_check_profile(check_profile)
+    return [evaluate_check(check_id, label, rule_target(profile[check_id]), meta, profile[check_id]) for check_id, label, _target in CHECK_DEFS]
 
 
 def flatten_metadata(asset: Dict[str, Any], fobj: Dict[str, Any]) -> Dict[str, Any]:
@@ -675,14 +810,142 @@ def add_flattened_aliases(flat: Dict[str, Any]) -> None:
             flat.setdefault("height", str(height))
 
 
-def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) -> CheckResult:
+def criteria_parts(criteria: Any) -> List[str]:
+    return [part.strip() for part in re.split(r"[,|]+", str(criteria or "")) if part.strip()]
+
+
+def criteria_is_anything_else(criteria: Any) -> bool:
+    text = lower(str(criteria or ""))
+    return text in {"anything else", "outside pass", "outside pass values", "out of spec", "otherwise", "any other value"}
+
+
+def matches_exact_text(value: str, criteria: Any) -> bool:
+    clean = lower(value).lstrip(".")
+    return any(clean == lower(part).lstrip(".") for part in criteria_parts(criteria))
+
+
+def matches_contains_text(value: str, criteria: Any) -> bool:
+    text = lower(value)
+    return any(lower(part) in text for part in criteria_parts(criteria))
+
+
+def matches_resolution(width: Optional[int], height: Optional[int], criteria: Any) -> bool:
+    if width is None or height is None:
+        return False
+    for part in criteria_parts(criteria):
+        parsed = parse_resolution(part)
+        if parsed and parsed == (width, height):
+            return True
+    return False
+
+
+def matches_frame_rate(rounded: Optional[str], criteria: Any) -> bool:
+    if rounded is None:
+        return False
+    for part in criteria_parts(criteria):
+        value = parse_frame_rate(part)
+        if value is not None and round_frame_rate(value) == rounded:
+            return True
+    return False
+
+
+def matches_numeric(value: Optional[int], criteria: Any) -> bool:
+    if value is None:
+        return False
+    for part in criteria_parts(criteria):
+        text = part.strip()
+        threshold = parse_number(text)
+        if threshold is None:
+            continue
+        if text.startswith(">=") and value >= threshold:
+            return True
+        if text.startswith(">") and value > threshold:
+            return True
+        if text.startswith("<=") and value <= threshold:
+            return True
+        if text.startswith("<") and value < threshold:
+            return True
+        range_match = re.match(r"^\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*$", text)
+        if range_match:
+            low = parse_number(range_match.group(1))
+            high = parse_number(range_match.group(2))
+            if low is not None and high is not None and low <= value <= high:
+                return True
+        elif value == threshold:
+            return True
+    return False
+
+
+def matches_ratio(value: Optional[float], raw: str, criteria: Any) -> bool:
+    if value is None and not raw:
+        return False
+    for part in criteria_parts(criteria):
+        text = part.strip()
+        ratio = parse_ratio(text)
+        if ":" in text and raw.strip() == text:
+            return True
+        range_match = re.match(r"^\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*$", text)
+        if range_match and value is not None:
+            low = float(range_match.group(1))
+            high = float(range_match.group(2))
+            if low <= value <= high:
+                return True
+        elif ratio is not None and value is not None and abs(value - ratio) <= 0.005:
+            return True
+    return False
+
+
+def matches_audio_bitrate(bitrate: Optional[int], channels: Optional[int], criteria: Any) -> bool:
+    if bitrate is None:
+        return False
+    for part in criteria_parts(criteria):
+        expected = parse_number(part)
+        if expected is None:
+            continue
+        if "channel" in lower(part):
+            if channels is not None and bitrate == channels * expected:
+                return True
+        elif matches_numeric(bitrate, part):
+            return True
+    return False
+
+
+def matches_stereo(streams: Optional[int], channels: Optional[int], criteria: Any) -> bool:
+    if channels is None:
+        return False
+    text = lower(str(criteria or ""))
+    numbers = [int(value) for value in re.findall(r"\d+", text)]
+    expected_streams = numbers[0] if "stream" in text and numbers else None
+    expected_channels = numbers[-1] if numbers else 2
+    stream_ok = expected_streams is None or streams in (None, expected_streams)
+    return stream_ok and channels == expected_channels
+
+
+def warning_or_fail(
+    check_id: str,
+    label: str,
+    target: str,
+    value: str,
+    rule: Dict[str, Any],
+    warning_match: bool,
+    note: str,
+) -> CheckResult:
+    if warning_match or criteria_is_anything_else(rule.get("warning")):
+        return result(check_id, label, target, "warning", value, note)
+    return result(check_id, label, target, "fail", value, note)
+
+
+def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any], rule: Optional[Dict[str, Any]] = None) -> CheckResult:
+    rule = rule or normalize_check_profile().get(check_id, {})
+    if not rule.get("enabled", True):
+        return ignored_result(check_id, label, target)
     if check_id == "file_type":
         ext = clean_ext(first(m, ["general.file extension", "file.file extension", "file extension", "extension"]))
         if not ext:
             return missing_result(check_id, label, target, "File extension was not available.")
-        if ext == "mov":
+        if matches_exact_text(ext, rule.get("pass")):
             return result(check_id, label, target, "pass", ext)
-        if ext == "mp4":
+        if matches_exact_text(ext, rule.get("warning")) or criteria_is_anything_else(rule.get("warning")):
             return result(check_id, label, target, "warning", ext, "MP4 is accepted as a warning for SVOD review.")
         return result(check_id, label, target, "fail", ext, "Expected .mov file extension. MP4 is a warning.")
     if check_id == "video_codec":
@@ -691,15 +954,34 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) ->
         profile = first(m, ["video.format profile", "profile", "format profile"])
         if not codec and not fmt:
             return missing_result(check_id, label, target, "Video codec was not available.")
-        ok = codec == "apch" or "prores" in lower(fmt)
         display = " ".join(x for x in [fmt or codec or "missing", profile, f"({codec})" if codec else ""] if x)
-        return result(check_id, label, target, "pass" if ok else "fail", display, "Expected ProRes 422 HQ codec tag apch.")
+        match_text = " ".join(x for x in [codec, fmt, profile] if x)
+        if matches_contains_text(match_text, rule.get("pass")):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_contains_text(match_text, rule.get("warning")),
+            "Expected ProRes 422 HQ codec tag apch.",
+        )
     if check_id == "video_bitrate":
         value = parse_number(first(m, ["video.bit rate", "video.bit_rate", "bit_rate", "overall bit rate"]))
         if value is None:
             return missing_result(check_id, label, target, "Video bit rate was not available.")
-        ok = value >= 145000000
-        return result(check_id, label, target, "pass" if ok else "fail", format_mbps(value), "Expected at least 145 Mb/s.")
+        if matches_numeric(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", format_mbps(value))
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            format_mbps(value),
+            rule,
+            matches_numeric(value, rule.get("warning")),
+            "Expected at least 145 Mb/s.",
+        )
     if check_id == "resolution":
         width = parse_number(first(m, ["video.width", "width"]))
         height = parse_number(first(m, ["video.height", "height"]))
@@ -709,11 +991,10 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) ->
                 width, height = parsed_resolution
         if width is None or height is None:
             return missing_result(check_id, label, target, "Resolution was not available.")
-        ok = width == 1920 and height == 1080
         value = f"{width or '?'}x{height or '?'}"
-        if ok:
+        if matches_resolution(width, height, rule.get("pass")):
             return result(check_id, label, target, "pass", value)
-        if width == 720 and height == 480:
+        if matches_resolution(width, height, rule.get("warning")) or criteria_is_anything_else(rule.get("warning")):
             return result(check_id, label, target, "warning", value, "720x480 is accepted as a warning for SVOD review.")
         return result(check_id, label, target, "fail", value, "Expected exactly 1920x1080.")
     if check_id == "aspect_ratio":
@@ -728,64 +1009,162 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) ->
         calculated = (width / height) if width and height else None
         if not raw and calculated is None:
             return missing_result(check_id, label, target, "Aspect ratio or resolution was not available.")
-        ok = raw == "16:9" or within(ratio, 1.76, 1.79) or within(calculated, 1.76, 1.79)
-        return result(check_id, label, target, "pass" if ok else "fail", raw or (f"{calculated:.3f}" if calculated else "missing"), "Expected 16:9.")
+        display = raw or (f"{calculated:.3f}" if calculated else "missing")
+        pass_match = matches_ratio(ratio, raw, rule.get("pass")) or matches_ratio(calculated, raw, rule.get("pass"))
+        warning_match = matches_ratio(ratio, raw, rule.get("warning")) or matches_ratio(calculated, raw, rule.get("warning"))
+        if pass_match:
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            warning_match,
+            "Expected 16:9.",
+        )
     if check_id == "frame_rate":
         fps = parse_frame_rate(first(m, ["video.r frame rate", "r_frame_rate", "video.frame rate", "frame_rate", "frame rate", "video framerate"]))
         rounded = round_frame_rate(fps) if fps is not None else None
-        if rounded in {"23.98", "29.97"}:
+        if matches_frame_rate(rounded, rule.get("pass")):
             return result(check_id, label, target, "pass", f"{rounded} fps")
         if rounded is None:
             return missing_result(check_id, label, target, "Frame rate was not available.")
-        return result(check_id, label, target, "fail", f"{rounded} fps" if rounded is not None else "missing", "Expected 23.98 or 29.97 fps for SVOD.")
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            f"{rounded} fps",
+            rule,
+            matches_frame_rate(rounded, rule.get("warning")),
+            "Expected 23.98 or 29.97 fps for SVOD.",
+        )
     if check_id == "chroma":
         value = first(m, ["video.chroma subsampling", "chroma subsampling", "video chroma subsampling", "pix_fmt", "pixel format"])
         if not value:
             return missing_result(check_id, label, target, "Chroma sampling was not available.")
-        ok = "4:2:2" in lower(value) or lower(value).startswith("yuv422")
-        return result(check_id, label, target, "pass" if ok else "fail", value or "missing", "Expected 4:2:2 chroma.")
+        if matches_contains_text(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", value or "missing")
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            value or "missing",
+            rule,
+            matches_contains_text(value, rule.get("warning")),
+            "Expected 4:2:2 chroma.",
+        )
     if check_id == "scan_type":
         value = first(m, ["video.scan type", "scan type", "video scan type", "field_order", "field order"])
         if not value:
             return missing_result(check_id, label, target, "Scan type was not available.")
-        return result(check_id, label, target, "pass" if lower(value) == "progressive" else "fail", value or "missing", "Expected progressive scan.")
+        if matches_contains_text(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", value or "missing")
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            value or "missing",
+            rule,
+            matches_contains_text(value, rule.get("warning")),
+            "Expected progressive scan.",
+        )
     if check_id == "audio_codec":
         value = first(m, ["audio.codec", "audio.format", "audio codec", "audio codecs", "audio codec name", "audio.codec_name"])
         if not value:
             return missing_result(check_id, label, target, "Audio codec was not available.")
-        ok = "pcm" in lower(value)
-        return result(check_id, label, target, "pass" if ok else "fail", value or "missing", "Expected PCM audio.")
+        if matches_contains_text(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", value or "missing")
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            value or "missing",
+            rule,
+            matches_contains_text(value, rule.get("warning")),
+            "Expected PCM audio.",
+        )
     if check_id == "audio_bitrate":
         channels = parse_number(first(m, ["audio.channel s", "audio.channels", "channels", "audio channels total"]))
         bitrate = parse_number(first(m, ["audio.bit rate", "audio.bit_rate", "audio_bitrate"]))
         if channels is None or bitrate is None:
             return missing_result(check_id, label, target, "Audio channels or bit rate was not available.")
         expected = channels * 1152000 if channels is not None else None
-        ok = bitrate is not None and expected is not None and bitrate == expected
-        return result(check_id, label, target, "pass" if ok else "warning", format_kbps(bitrate), f"Expected {format_kbps(expected)} for {channels or '?'} channel(s).")
+        if matches_audio_bitrate(bitrate, channels, rule.get("pass")):
+            return result(check_id, label, target, "pass", format_kbps(bitrate))
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            format_kbps(bitrate),
+            rule,
+            matches_audio_bitrate(bitrate, channels, rule.get("warning")),
+            f"Expected {format_kbps(expected)} for {channels or '?'} channel(s).",
+        )
     if check_id == "audio_sample_rate":
         value = parse_number(first(m, ["audio.sampling rate", "sample_rate", "sampling rate"]))
         if value is None:
             return missing_result(check_id, label, target, "Audio sample rate was not available.")
-        return result(check_id, label, target, "pass" if value == 48000 else "warning", "48 kHz" if value == 48000 else (f"{value} Hz" if value else "missing"), "Expected 48000 Hz.")
+        display = "48 kHz" if value == 48000 else (f"{value} Hz" if value else "missing")
+        if matches_numeric(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_numeric(value, rule.get("warning")),
+            "Expected 48000 Hz.",
+        )
     if check_id == "audio_bit_depth":
         value = parse_number(first(m, ["audio.bit depth", "bits_per_sample", "bit depth"]))
         if value is None:
             return missing_result(check_id, label, target, "Audio bit depth was not available.")
-        return result(check_id, label, target, "pass" if value == 24 else "warning", f"{value} bits" if value else "missing", "Expected 24-bit PCM.")
+        display = f"{value} bits" if value else "missing"
+        if matches_numeric(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_numeric(value, rule.get("warning")),
+            "Expected 24-bit PCM.",
+        )
     if check_id == "stereo_only":
         streams = parse_number(first(m, ["general.count of audio streams", "count of audio streams", "audio_stream_count"]))
         channels = parse_number(first(m, ["audio.channel s", "audio.channels", "channels", "audio channels total"]))
         if channels is None:
             return missing_result(check_id, label, target, "Audio channel count was not available.")
-        ok = channels == 2 and (streams in (None, 1))
-        return result(check_id, label, target, "pass" if ok else "fail", f"{streams or '?'} stream, {channels or '?'} channels", "Expected one stereo audio stream.")
+        display = f"{streams or '?'} stream, {channels or '?'} channels"
+        if matches_stereo(streams, channels, rule.get("pass")):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_stereo(streams, channels, rule.get("warning")),
+            "Expected one stereo audio stream.",
+        )
     if check_id == "timecode_start":
         value = first(m, ["general.tim", "tim", "timecode", "start_timecode"])
         if not value:
             return missing_result(check_id, label, target, "Start timecode was not available.")
-        ok = value in ("00:00:00:00", "00;00;00;00")
-        return result(check_id, label, target, "pass" if ok else "fail", value or "missing", "Expected SVOD start timecode at zero.")
+        if matches_exact_text(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", value or "missing")
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            value or "missing",
+            rule,
+            matches_exact_text(value, rule.get("warning")),
+            "Expected SVOD start timecode at zero.",
+        )
     return result(check_id, label, target, "info", "not checked")
 
 
@@ -795,6 +1174,10 @@ def result(check_id: str, label: str, target: str, status: str, value: str, note
 
 def missing_result(check_id: str, label: str, target: str, note: str) -> CheckResult:
     return result(check_id, label, target, "missing", "missing", note)
+
+
+def ignored_result(check_id: str, label: str, target: str) -> CheckResult:
+    return CheckResult(check_id, label, "ignored", "ignored", target, "Ignored by user settings.")
 
 
 def verdict_from_checks(checks: Sequence[CheckResult]) -> str:

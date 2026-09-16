@@ -21,7 +21,7 @@ import te_iconik_scanner as scanner
 
 
 APP_NAME = "TE Tool - Iconik Lite Version"
-VERSION = "V1.7"
+VERSION = "V1.8"
 CONFIG_DIR = Path.home() / "Library" / "Application Support" / "TE Tool Iconik Lite"
 CONFIG_PATH = CONFIG_DIR / "settings.json"
 KEYCHAIN_SERVICE = "TE Tool Iconik Lite"
@@ -41,6 +41,7 @@ PASS_BG = "#ddeed9"
 WARN_BG = "#f8e7b8"
 FAIL_BG = "#eee3f6"
 MISSING_BG = "#dceaf7"
+INFO_FILL = "#eaf0f6"
 
 
 class ConfigStore:
@@ -61,6 +62,7 @@ class ConfigStore:
             "aws_region": str(data.get("aws_region") or DEFAULT_REGION).strip() or DEFAULT_REGION,
             "output_path": str(data.get("output_path") or default_output_path()),
             "save_xlsx_automatically": bool(data.get("save_xlsx_automatically", True)),
+            "check_profile": scanner.normalize_check_profile(data.get("check_profile")),
         }
         tmp = CONFIG_PATH.with_suffix(".json.tmp")
         with tmp.open("w", encoding="utf-8") as handle:
@@ -150,13 +152,127 @@ def apply_aws_environment(settings: Dict[str, str]) -> None:
             os.environ.pop(key, None)
 
 
+class CheckRulesDialog(tk.Toplevel):
+    def __init__(self, parent: "SettingsDialog") -> None:
+        super().__init__(parent)
+        self.settings_dialog = parent
+        self.title("QC Check Rules")
+        self.geometry("1100x720")
+        self.minsize(980, 560)
+        self.configure(background=APP_BG)
+        self.transient(parent)
+        self.grab_set()
+        self.rule_vars: Dict[str, Dict[str, Any]] = {}
+        self._build()
+        self._load_profile(parent.check_profile)
+
+    def _build(self) -> None:
+        outer = ttk.Frame(self, padding=16)
+        outer.pack(fill=tk.BOTH, expand=True)
+        outer.columnconfigure(0, weight=1)
+        outer.rowconfigure(1, weight=1)
+
+        intro = (
+            "Adjust the shipped SVOD check profile. Uncheck a row to ignore that field. "
+            "Use comma-separated values for lists, such as 23.98, 29.97, or type anything else in Warning to make all non-pass values warnings."
+        )
+        ttk.Label(outer, text=intro, wraplength=1000).grid(row=0, column=0, sticky="ew")
+
+        table_frame = ttk.Frame(outer)
+        table_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+
+        canvas = tk.Canvas(table_frame, background=APP_BG, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=canvas.yview)
+        self.rules_frame = ttk.Frame(canvas)
+        window_id = canvas.create_window((0, 0), window=self.rules_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        def configure_scrollregion(_event: tk.Event) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def configure_width(event: tk.Event) -> None:
+            canvas.itemconfigure(window_id, width=event.width)
+
+        self.rules_frame.bind("<Configure>", configure_scrollregion)
+        canvas.bind("<Configure>", configure_width)
+
+        headers = ("Use", "Field", "Pass criteria", "Warning criteria", "Fail criteria")
+        for col, text in enumerate(headers):
+            ttk.Label(self.rules_frame, text=text, font=("Arial", 11, "bold")).grid(
+                row=0,
+                column=col,
+                sticky="ew",
+                padx=(0, 8),
+                pady=(0, 8),
+            )
+        self.rules_frame.columnconfigure(2, weight=1)
+        self.rules_frame.columnconfigure(3, weight=1)
+        self.rules_frame.columnconfigure(4, weight=1)
+
+        for row_index, (check_id, label, _target) in enumerate(scanner.CHECK_DEFS, start=1):
+            enabled_var = tk.BooleanVar(value=True)
+            pass_var = tk.StringVar(value="")
+            warning_var = tk.StringVar(value="")
+            fail_var = tk.StringVar(value="")
+            self.rule_vars[check_id] = {
+                "enabled": enabled_var,
+                "pass": pass_var,
+                "warning": warning_var,
+                "fail": fail_var,
+            }
+            ttk.Checkbutton(self.rules_frame, variable=enabled_var).grid(row=row_index, column=0, sticky="w", padx=(0, 8), pady=3)
+            ttk.Label(self.rules_frame, text=label).grid(row=row_index, column=1, sticky="w", padx=(0, 8), pady=3)
+            ttk.Entry(self.rules_frame, textvariable=pass_var).grid(row=row_index, column=2, sticky="ew", padx=(0, 8), pady=3)
+            ttk.Entry(self.rules_frame, textvariable=warning_var).grid(row=row_index, column=3, sticky="ew", padx=(0, 8), pady=3)
+            ttk.Entry(self.rules_frame, textvariable=fail_var).grid(row=row_index, column=4, sticky="ew", pady=3)
+
+        actions = ttk.Frame(outer)
+        actions.grid(row=2, column=0, sticky="ew", pady=(14, 0))
+        actions.columnconfigure(0, weight=1)
+        ttk.Button(actions, text="Restore Defaults", command=self._restore_defaults).grid(row=0, column=0, sticky="w")
+        ttk.Button(actions, text="Cancel", command=self.destroy).grid(row=0, column=1, padx=(8, 0))
+        ttk.Button(actions, text="Apply Check Rules", command=self._apply).grid(row=0, column=2, padx=(8, 0))
+
+    def _load_profile(self, profile: Dict[str, Any]) -> None:
+        normalized = scanner.normalize_check_profile(profile)
+        for check_id, vars_for_rule in self.rule_vars.items():
+            rule = normalized[check_id]
+            vars_for_rule["enabled"].set(bool(rule.get("enabled", True)))
+            vars_for_rule["pass"].set(str(rule.get("pass") or ""))
+            vars_for_rule["warning"].set(str(rule.get("warning") or ""))
+            vars_for_rule["fail"].set(str(rule.get("fail") or ""))
+
+    def _profile_from_vars(self) -> Dict[str, Dict[str, Any]]:
+        profile: Dict[str, Dict[str, Any]] = {}
+        for check_id, vars_for_rule in self.rule_vars.items():
+            profile[check_id] = {
+                "enabled": bool(vars_for_rule["enabled"].get()),
+                "pass": str(vars_for_rule["pass"].get()).strip(),
+                "warning": str(vars_for_rule["warning"].get()).strip(),
+                "fail": str(vars_for_rule["fail"].get()).strip(),
+            }
+        return scanner.normalize_check_profile(profile)
+
+    def _restore_defaults(self) -> None:
+        self._load_profile(scanner.default_check_profile())
+
+    def _apply(self) -> None:
+        self.settings_dialog.check_profile = self._profile_from_vars()
+        self.settings_dialog.rules_status_var.set("QC check rules updated. Click Save Settings to keep them.")
+        self.destroy()
+
+
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent: "IconikLiteApp") -> None:
         super().__init__(parent)
         self.parent_app = parent
         self.title("Settings")
-        self.geometry("900x620")
-        self.minsize(820, 560)
+        self.geometry("1040x680")
+        self.minsize(960, 600)
         self.configure(background=APP_BG)
         self.transient(parent)
         self.grab_set()
@@ -172,6 +288,9 @@ class SettingsDialog(tk.Toplevel):
         self.output_path_var = tk.StringVar(value=str(cfg.get("output_path") or default_output_path()))
         self.auto_save_var = tk.BooleanVar(value=bool(cfg.get("save_xlsx_automatically", True)))
         self.test_status_var = tk.StringVar(value="")
+        self.check_profile = scanner.normalize_check_profile(cfg.get("check_profile"))
+        self.rules_status_var = tk.StringVar(value="Using saved QC check rules.")
+        self.rule_vars: Dict[str, Dict[str, Any]] = {}
 
         self.secret_entries: List[ttk.Entry] = []
         self._build()
@@ -240,10 +359,19 @@ class SettingsDialog(tk.Toplevel):
         actions.grid(row=4, column=0, sticky="ew", pady=(16, 0))
         actions.columnconfigure(0, weight=1)
         ttk.Button(actions, text="Reveal / Hide Secrets", command=self._toggle_secrets).grid(row=0, column=0, sticky="w")
-        ttk.Button(actions, text="Test Iconik", command=self._test_iconik).grid(row=0, column=1, padx=(8, 0))
-        ttk.Button(actions, text="Remove Saved Credentials", command=self._remove_credentials).grid(row=0, column=2, padx=(8, 0))
-        ttk.Button(actions, text="Cancel", command=self.destroy).grid(row=0, column=3, padx=(16, 0))
-        ttk.Button(actions, text="Save Settings", command=self._save).grid(row=0, column=4, padx=(8, 0))
+        ttk.Button(actions, text="Edit QC Checks...", command=self._edit_check_rules).grid(row=0, column=1, padx=(8, 0))
+        ttk.Button(actions, text="Restore Check Defaults", command=self._restore_check_defaults).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(actions, text="Test Iconik", command=self._test_iconik).grid(row=0, column=3, padx=(8, 0))
+        ttk.Button(actions, text="Remove Saved Credentials", command=self._remove_credentials).grid(row=1, column=0, sticky="w", pady=(10, 0))
+        ttk.Button(actions, text="Cancel", command=self.destroy).grid(row=1, column=2, sticky="e", padx=(16, 0), pady=(10, 0))
+        ttk.Button(actions, text="Save Settings", command=self._save).grid(row=1, column=3, sticky="e", padx=(8, 0), pady=(10, 0))
+        ttk.Label(actions, textvariable=self.rules_status_var, style="Muted.TLabel").grid(
+            row=2,
+            column=0,
+            columnspan=4,
+            sticky="w",
+            pady=(8, 0),
+        )
 
     def _secret_entry(self, parent: tk.Widget, variable: tk.StringVar) -> ttk.Entry:
         entry = ttk.Entry(parent, textvariable=variable, show="*")
@@ -264,6 +392,13 @@ class SettingsDialog(tk.Toplevel):
         )
         if path:
             self.output_path_var.set(path)
+
+    def _edit_check_rules(self) -> None:
+        CheckRulesDialog(self)
+
+    def _restore_check_defaults(self) -> None:
+        self.check_profile = scanner.default_check_profile()
+        self.rules_status_var.set("QC check rules restored to shipped defaults. Click Save Settings to keep them.")
 
     def _test_iconik(self) -> None:
         app_id = self.iconik_app_id_var.get().strip()
@@ -297,6 +432,7 @@ class SettingsDialog(tk.Toplevel):
                     "aws_region": self.aws_region_var.get(),
                     "output_path": self.output_path_var.get(),
                     "save_xlsx_automatically": self.auto_save_var.get(),
+                    "check_profile": self.check_profile,
                 }
             )
             KeychainStore.set(KEY_ICONIK_APP_ID, self.iconik_app_id_var.get())
@@ -370,6 +506,7 @@ class IconikLiteApp(tk.Tk):
             "aws_access_key_id": KeychainStore.get(KEY_AWS_ACCESS_KEY_ID),
             "aws_secret_access_key": KeychainStore.get(KEY_AWS_SECRET_ACCESS_KEY),
             "aws_session_token": KeychainStore.get(KEY_AWS_SESSION_TOKEN),
+            "check_profile": scanner.normalize_check_profile(cfg.get("check_profile")),
         }
         self.current_output_path = self.settings["output_path"]
         self.output_path_var.set(self.current_output_path)
@@ -494,6 +631,7 @@ class IconikLiteApp(tk.Tk):
         self.detail_tree.tag_configure("warning", background=WARN_BG, foreground=TEXT)
         self.detail_tree.tag_configure("fail", background=FAIL_BG, foreground=TEXT)
         self.detail_tree.tag_configure("missing", background=MISSING_BG, foreground=TEXT)
+        self.detail_tree.tag_configure("ignored", background=INFO_FILL, foreground=TEXT)
 
         panes.add(results_frame, minsize=220, stretch="always")
         panes.add(details_frame, minsize=190, stretch="always")
@@ -572,7 +710,13 @@ class IconikLiteApp(tk.Tk):
                 host=str(self.settings.get("host") or DEFAULT_HOST),
             )
             self.result_queue.put(("log", "Contacting Iconik and scanning metadata..."))
-            rows = scanner.scan_target(client, target, progress=self._worker_progress, control=self._scan_control)
+            rows = scanner.scan_target(
+                client,
+                target,
+                progress=self._worker_progress,
+                control=self._scan_control,
+                check_profile=self.settings.get("check_profile"),
+            )
             if self.stop_requested.is_set():
                 raise scanner.ScanStopped("Scan stopped by user.")
 

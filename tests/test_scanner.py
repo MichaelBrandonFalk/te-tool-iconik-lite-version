@@ -184,6 +184,44 @@ class ScannerTests(unittest.TestCase):
         self.assertTrue(any(check.check_id == "audio_bit_depth" and check.status == "warning" for check in checks))
         self.assertFalse(any(check.status == "fail" for check in checks))
 
+    def test_custom_check_profile_can_ignore_and_adjust_rules(self):
+        asset = {"id": "asset-1", "title": "Test"}
+        fobj = {
+            "original_name": "title.mov",
+            "technical_metadata": {
+                "general": {"count of audio streams": "1", "tim": "00:00:00:00"},
+                "video": {
+                    "codec id": "apch",
+                    "bit rate": "120000000",
+                    "width": "1920",
+                    "height": "1080",
+                    "display aspect ratio": "1.778",
+                    "frame rate": "23.964",
+                    "chroma subsampling": "4:2:2",
+                    "scan type": "Progressive",
+                },
+                "audio": {
+                    "format": "PCM",
+                    "bit rate": "2304000",
+                    "channel s": "2",
+                    "sampling rate": "48000",
+                    "bit depth": "24",
+                },
+            },
+        }
+        profile = scanner.default_check_profile()
+        profile["video_bitrate"]["enabled"] = False
+        profile["frame_rate"]["warning"] = "23.96"
+        checks = scanner.evaluate_record(asset, fobj, profile)
+        self.assertTrue(any(check.check_id == "video_bitrate" and check.status == "ignored" for check in checks))
+        self.assertTrue(any(check.check_id == "frame_rate" and check.status == "warning" for check in checks))
+        self.assertEqual(scanner.verdict_from_checks(checks), "WARNING")
+
+        profile = scanner.default_check_profile()
+        profile["video_bitrate"]["pass"] = ">= 100 Mb/s"
+        checks = scanner.evaluate_record(asset, fobj, profile)
+        self.assertTrue(any(check.check_id == "video_bitrate" and check.status == "pass" for check in checks))
+
     def test_write_xlsx(self):
         row = scanner.ScanRow(
             verdict="FAIL",

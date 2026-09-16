@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.8
+
+- Added configurable QC check rules in Settings with per-field ignore checkboxes.
+- Added editable pass, warning, and fail criteria for each SVOD metadata check.
+- Added a restore-defaults path that returns the check profile to the shipped SVOD settings.
+- Saved the custom check profile in the app settings and applied it to scans and XLSX reports.
+
 ## V1.7
 
 - Added a `Reason` column to the XLSX report listing all fail, warning, and missing-info fields for each non-pass title.
