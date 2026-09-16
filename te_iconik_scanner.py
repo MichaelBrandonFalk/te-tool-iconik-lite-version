@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.6"
+VERSION = "V1.7"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -711,7 +711,11 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) ->
             return missing_result(check_id, label, target, "Resolution was not available.")
         ok = width == 1920 and height == 1080
         value = f"{width or '?'}x{height or '?'}"
-        return result(check_id, label, target, "pass" if ok else "fail", value, "Expected exactly 1920x1080.")
+        if ok:
+            return result(check_id, label, target, "pass", value)
+        if width == 720 and height == 480:
+            return result(check_id, label, target, "warning", value, "720x480 is accepted as a warning for SVOD review.")
+        return result(check_id, label, target, "fail", value, "Expected exactly 1920x1080.")
     if check_id == "aspect_ratio":
         raw = first(m, ["video.display aspect ratio string", "video.display aspect ratio", "display_aspect_ratio", "display aspect ratio"])
         ratio = parse_ratio(raw)
@@ -758,17 +762,17 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any]) ->
             return missing_result(check_id, label, target, "Audio channels or bit rate was not available.")
         expected = channels * 1152000 if channels is not None else None
         ok = bitrate is not None and expected is not None and bitrate == expected
-        return result(check_id, label, target, "pass" if ok else "fail", format_kbps(bitrate), f"Expected {format_kbps(expected)} for {channels or '?'} channel(s).")
+        return result(check_id, label, target, "pass" if ok else "warning", format_kbps(bitrate), f"Expected {format_kbps(expected)} for {channels or '?'} channel(s).")
     if check_id == "audio_sample_rate":
         value = parse_number(first(m, ["audio.sampling rate", "sample_rate", "sampling rate"]))
         if value is None:
             return missing_result(check_id, label, target, "Audio sample rate was not available.")
-        return result(check_id, label, target, "pass" if value == 48000 else "fail", "48 kHz" if value == 48000 else (f"{value} Hz" if value else "missing"), "Expected 48000 Hz.")
+        return result(check_id, label, target, "pass" if value == 48000 else "warning", "48 kHz" if value == 48000 else (f"{value} Hz" if value else "missing"), "Expected 48000 Hz.")
     if check_id == "audio_bit_depth":
         value = parse_number(first(m, ["audio.bit depth", "bits_per_sample", "bit depth"]))
         if value is None:
             return missing_result(check_id, label, target, "Audio bit depth was not available.")
-        return result(check_id, label, target, "pass" if value == 24 else "fail", f"{value} bits" if value else "missing", "Expected 24-bit PCM.")
+        return result(check_id, label, target, "pass" if value == 24 else "warning", f"{value} bits" if value else "missing", "Expected 24-bit PCM.")
     if check_id == "stereo_only":
         streams = parse_number(first(m, ["general.count of audio streams", "count of audio streams", "audio_stream_count"]))
         channels = parse_number(first(m, ["audio.channel s", "audio.channels", "channels", "audio channels total"]))
@@ -920,6 +924,7 @@ def int_or_zero(value: Any) -> int:
 def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str) -> None:
     headers = [
         "Result",
+        "Reason",
         "Asset Title",
         "Upload Date",
         "File Name",
@@ -929,11 +934,13 @@ def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str) -> None:
     ] + [label for _, label, _ in CHECK_DEFS]
 
     data_rows: List[List[str]] = []
-    row_statuses: List[str] = []
+    cell_styles: List[List[str]] = []
     for row in rows:
         check_values = [f"{check.status.upper()}: {check.value}" for check in row.checks]
+        reason = reason_for_row(row)
         data_rows.append([
             row.verdict,
+            reason,
             row.asset_title,
             row.upload_date,
             row.file_name,
@@ -942,7 +949,9 @@ def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str) -> None:
             row.asset_id,
             *check_values,
         ])
-        row_statuses.append(row.verdict.lower())
+        row_style = status_style_key(row.verdict)
+        check_styles = [status_style_key(check.status) if check.status in {"fail", "warning", "missing"} else "" for check in row.checks]
+        cell_styles.append([row_style, row_style if reason else "", "", "", "", "", "", "", *check_styles])
 
     summary = [
         ["TE Tool - Iconik Lite Version", VERSION],
@@ -962,21 +971,46 @@ def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str) -> None:
         zf.writestr("xl/_rels/workbook.xml.rels", workbook_rels_xml())
         zf.writestr("xl/styles.xml", styles_xml())
         zf.writestr("xl/worksheets/sheet1.xml", worksheet_xml("Summary", summary, []))
-        zf.writestr("xl/worksheets/sheet2.xml", worksheet_xml("SVOD Report", [headers, *data_rows], ["header", *[status_style_key(s) for s in row_statuses]]))
+        zf.writestr("xl/worksheets/sheet2.xml", worksheet_xml("SVOD Report", [headers, *data_rows], ["header", *["" for _ in data_rows]], [[], *cell_styles]))
 
 
-def worksheet_xml(name: str, rows: Sequence[Sequence[str]], row_styles: Sequence[str]) -> str:
-    col_widths = {1: 14, 2: 34, 3: 22, 4: 32, 5: 46, 6: 48, 7: 38}
+def reason_for_row(row: ScanRow) -> str:
+    problem_checks = [check for check in row.checks if check.status in {"fail", "warning", "missing"}]
+    if not problem_checks:
+        return ""
+    return "; ".join(f"{check.label} ({reason_status(check.status)}: {check.value})" for check in problem_checks)
+
+
+def reason_status(status: str) -> str:
+    normalized = status_style_key(status)
+    if normalized == "missing":
+        return "MISSING INFO"
+    if normalized == "warning":
+        return "WARNING"
+    if normalized == "fail":
+        return "FAIL"
+    return normalized.upper()
+
+
+def worksheet_xml(
+    name: str,
+    rows: Sequence[Sequence[str]],
+    row_styles: Sequence[str],
+    cell_styles: Optional[Sequence[Sequence[str]]] = None,
+) -> str:
+    col_widths = {1: 14, 2: 58, 3: 34, 4: 22, 5: 32, 6: 46, 7: 48, 8: 38}
     cols = "".join(f'<col min="{i}" max="{i}" width="{w}" customWidth="1"/>' for i, w in col_widths.items())
     sheet_rows = []
     for r_idx, row in enumerate(rows, start=1):
         style_name = row_styles[r_idx - 1] if r_idx - 1 < len(row_styles) else ""
+        row_cell_styles = cell_styles[r_idx - 1] if cell_styles and r_idx - 1 < len(cell_styles) else []
         cells = []
         for c_idx, value in enumerate(row, start=1):
-            style = style_index(style_name, c_idx)
+            cell_style_name = row_cell_styles[c_idx - 1] if c_idx - 1 < len(row_cell_styles) else ""
+            style = style_index(cell_style_name or style_name, c_idx, bool(cell_style_name))
             cells.append(f'<c r="{cell_ref(r_idx, c_idx)}" t="inlineStr" s="{style}"><is><t>{escape(str(value or ""))}</t></is></c>')
         sheet_rows.append(f'<row r="{r_idx}">{"".join(cells)}</row>')
-    auto_filter = '<autoFilter ref="A1:U1"/>' if name == "SVOD Report" else ""
+    auto_filter = f'<autoFilter ref="A1:{cell_ref(1, len(rows[0]))}"/>' if name == "SVOD Report" and rows else ""
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
@@ -987,10 +1021,10 @@ def worksheet_xml(name: str, rows: Sequence[Sequence[str]], row_styles: Sequence
     )
 
 
-def style_index(style_name: str, c_idx: int) -> int:
+def style_index(style_name: str, c_idx: int, force: bool = False) -> int:
     if style_name == "header":
         return 1
-    if c_idx == 1:
+    if force or c_idx == 1:
         return {"pass": 2, "warning": 3, "fail": 4, "missing": 5}.get(style_name, 0)
     return 0
 

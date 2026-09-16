@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.7
+
+- Added a `Reason` column to the XLSX report listing all fail, warning, and missing-info fields for each non-pass title.
+- Colored individual XLSX check cells when they cause a fail, warning, or missing-info status.
+- Changed `720x480` resolution from fail to warning.
+- Changed out-of-spec audio bit rate, audio sample rate, and audio bit depth from fail to warning.
+
 ## V1.6
 
 - Increased the desktop app's default and minimum window size so the report workspace has room to breathe.

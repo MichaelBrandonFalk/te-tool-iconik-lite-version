@@ -4,17 +4,17 @@ TE Tool - Iconik Lite Version is a plug-and-play macOS app for SVOD technical me
 
 ## Version
 
-Current public version: `V1.6`
+Current public version: `V1.7`
 
 ## Download
 
 - Public page: https://michaelbrandonfalk.github.io/te-tool-iconik-lite-version/
-- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_6.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.6/TE.Tool.Iconik.Lite.Version.V1_6.macOS.Apple.Silicon.zip)
+- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_7.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.7/TE.Tool.Iconik.Lite.Version.V1_7.macOS.Apple.Silicon.zip)
 
 ## App Workflow
 
 1. Download and unzip the Mac app.
-2. Open `TE Tool Iconik Lite Version V1_6.app`.
+2. Open `TE Tool Iconik Lite Version V1_7.app`.
 3. Open Settings and save AWS credentials for S3 scans.
 4. Save Iconik App-ID/Auth-Token for Iconik links and metadata lookups.
 5. Click **Test Iconik** in Settings to confirm the API connection.
@@ -42,25 +42,28 @@ The app lists each video, retrieves Iconik metadata, applies the SVOD checks, di
 
 ## What It Checks
 
-V1.6 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
+V1.7 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
 - lowercase `.mov` file type, matching TE Tool's case-sensitive check
 - `.mp4` file type as a warning, not a hard fail
 - ProRes 422 HQ codec tag `apch`
 - Video bit rate at or above 145 Mb/s
 - `1920x1080` resolution
+- `720x480` resolution as a warning, not a hard fail
 - `16:9` aspect ratio
 - frame rate rounded to two decimals: `23.98` and `29.97` pass, all other values fail
 - `4:2:2` chroma
 - Progressive scan
 - PCM audio
-- Audio bit rate matching channel count
-- 48 kHz sample rate
-- 24-bit audio
+- Audio bit rate matching channel count, with out-of-spec values marked as warnings
+- 48 kHz sample rate, with out-of-spec values marked as warnings
+- 24-bit audio, with out-of-spec values marked as warnings
 - One stereo audio stream
 - Start timecode at `00:00:00:00` or `00;00;00;00`
 
 Missing technical values are marked `MISSING INFO` with blue/pastel styling instead of being treated as hard failures.
+
+The XLSX report includes a `Reason` column for non-pass rows and colors each failing, warning, or missing-info check cell with the matching pastel status color.
 
 ## What It Does Not Check
 
@@ -82,13 +85,13 @@ The public web page still includes a small browser-only metadata text checker. I
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_6_mac.sh
+./build_te_tool_iconik_lite_v1_7_mac.sh
 ```
 
 The script creates:
 
-- `dist/TE Tool Iconik Lite Version V1_6.app`
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_6.macOS.Apple.Silicon.zip`
+- `dist/TE Tool Iconik Lite Version V1_7.app`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_7.macOS.Apple.Silicon.zip`
 
 ## Versioning
 

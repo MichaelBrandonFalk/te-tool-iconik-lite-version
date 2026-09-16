@@ -36,6 +36,11 @@ const svod2997Pass = svodPass.replace(/Frame rate\t23\.976/g, "Frame rate\t29.97
 const svodFail = svodPass.replace("Width\t1920", "Width\t1280").replace("Bit rate\t172557886", "Bit rate\t120000000");
 const svodBadFrame = svodPass.replace(/Frame rate\t23\.976/g, "Frame rate\t23.964");
 const svodMp4Warn = svodPass.replace("File extension\tmov", "File extension\tmp4");
+const svod720Warn = svodPass.replace("Width\t1920", "Width\t720").replace("Height\t1080", "Height\t480");
+const svodAudioWarn = svodPass
+  .replace("Bit rate\t2304000", "Bit rate\t1536000")
+  .replace("Sampling rate\t48000", "Sampling rate\t44100")
+  .replace("Bit depth\t24", "Bit depth\t16");
 const svodMissing = `GENERAL
 File extension\tmov
 VIDEO
@@ -63,13 +68,25 @@ const mp4Result = core.evaluateMetadata(svodMp4Warn, "mp4.txt");
 assert.strictEqual(mp4Result.verdict, "WARN");
 assert.ok(mp4Result.checks.some((check) => check.id === "file_type" && check.status === "warn"));
 
+const warn720Result = core.evaluateMetadata(svod720Warn, "720.txt");
+assert.strictEqual(warn720Result.verdict, "WARN");
+assert.ok(warn720Result.checks.some((check) => check.id === "resolution" && check.status === "warn"));
+assert.ok(warn720Result.reason.includes("Resolution (WARNING: 720x480)"));
+
+const audioWarnResult = core.evaluateMetadata(svodAudioWarn, "audio-warn.txt");
+assert.strictEqual(audioWarnResult.verdict, "WARN");
+assert.ok(audioWarnResult.checks.some((check) => check.id === "audio_bitrate" && check.status === "warn"));
+assert.ok(audioWarnResult.checks.some((check) => check.id === "audio_sample_rate" && check.status === "warn"));
+assert.ok(audioWarnResult.checks.some((check) => check.id === "audio_bit_depth" && check.status === "warn"));
+
 const missingResult = core.evaluateMetadata(svodMissing, "missing.txt");
 assert.strictEqual(missingResult.verdict, "MISSING INFO");
 assert.ok(missingResult.counts.missing > 0);
 
 const csv = core.toCsv([passResult]);
+assert.ok(csv.startsWith("title,s3_prefix,verdict,reason,check,status,value,target,note"));
 assert.ok(csv.includes("PUR0003995"));
 assert.ok(csv.includes("File type"));
-assert.strictEqual(core.VERSION, "V1.6");
+assert.strictEqual(core.VERSION, "V1.7");
 
 console.log("core tests passed");

@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "V1.6";
+  const VERSION = "V1.7";
   const MIN_VIDEO_BITRATE = 145000000;
 
   const CHECKS = [
@@ -54,9 +54,9 @@
         const finalHeight = height || (parsed ? parsed[1] : NaN);
         if (!Number.isFinite(finalWidth) || !Number.isFinite(finalHeight)) return missing("missing", "Resolution was not available.");
         const value = `${finalWidth}x${finalHeight}`;
-        return finalWidth === 1920 && finalHeight === 1080
-          ? pass(value)
-          : fail(value, "Expected exactly 1920x1080.");
+        if (finalWidth === 1920 && finalHeight === 1080) return pass(value);
+        if (finalWidth === 720 && finalHeight === 480) return warn(value, "720x480 is accepted as a warning for SVOD review.");
+        return fail(value, "Expected exactly 1920x1080.");
       },
     },
     {
@@ -135,7 +135,7 @@
         const expected = channels * 1152000;
         return bitrate === expected
           ? pass(formatKbps(bitrate))
-          : fail(formatKbps(bitrate), `Expected ${formatKbps(expected)} for ${channels} channel(s).`);
+          : warn(formatKbps(bitrate), `Expected ${formatKbps(expected)} for ${channels} channel(s).`);
       },
     },
     {
@@ -147,7 +147,7 @@
         if (!Number.isFinite(value)) return missing("missing", "Audio sample rate was not available.");
         return value === 48000
           ? pass("48 kHz")
-          : fail(value ? `${value} Hz` : "missing", "Expected 48000 Hz.");
+          : warn(value ? `${value} Hz` : "missing", "Expected 48000 Hz.");
       },
     },
     {
@@ -159,7 +159,7 @@
         if (!Number.isFinite(value)) return missing("missing", "Audio bit depth was not available.");
         return value === 24
           ? pass("24 bits")
-          : fail(value ? `${value} bits` : "missing", "Expected 24-bit PCM.");
+          : warn(value ? `${value} bits` : "missing", "Expected 24-bit PCM.");
       },
     },
     {
@@ -241,7 +241,8 @@
     const infoChecks = INFO_CHECKS.map((check) => ({ id: check.id, label: check.label, target: check.target, ...check.evaluate(parsed.flat) }));
     const counts = tally(checks);
     const verdict = counts.fail > 0 ? "FAIL" : counts.missing > 0 ? "MISSING INFO" : counts.warn > 0 ? "WARN" : "PASS";
-    return { ...parsed, checks, infoChecks, counts, verdict, version: VERSION };
+    const reason = reasonForChecks(checks);
+    return { ...parsed, checks, infoChecks, counts, verdict, reason, version: VERSION };
   }
 
   function tally(checks) {
@@ -373,13 +374,24 @@
   }
 
   function toCsv(results) {
-    const rows = [["title", "s3_prefix", "verdict", "check", "status", "value", "target", "note"]];
+    const rows = [["title", "s3_prefix", "verdict", "reason", "check", "status", "value", "target", "note"]];
     for (const result of results) {
       for (const check of [...result.checks, ...result.infoChecks]) {
-        rows.push([result.title, result.s3Prefix, result.verdict, check.label, check.status.toUpperCase(), check.value, check.target, check.note || ""]);
+        rows.push([result.title, result.s3Prefix, result.verdict, result.reason || "", check.label, check.status.toUpperCase(), check.value, check.target, check.note || ""]);
       }
     }
     return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+  }
+
+  function reasonForChecks(checks) {
+    const problemChecks = checks.filter((check) => ["fail", "warn", "missing"].includes(check.status));
+    return problemChecks.map((check) => `${check.label} (${reasonStatus(check.status)}: ${check.value})`).join("; ");
+  }
+
+  function reasonStatus(status) {
+    if (status === "warn") return "WARNING";
+    if (status === "missing") return "MISSING INFO";
+    return String(status || "").toUpperCase();
   }
 
   function csvCell(value) {

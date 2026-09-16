@@ -151,9 +151,42 @@ class ScannerTests(unittest.TestCase):
         checks = scanner.evaluate_record(asset, fobj)
         self.assertEqual(scanner.verdict_from_checks(checks), "FAIL")
 
+    def test_720x480_and_audio_specs_are_warnings(self):
+        asset = {"id": "asset-1", "title": "Test"}
+        fobj = {
+            "original_name": "title.mov",
+            "technical_metadata": {
+                "general": {"count of audio streams": "1", "tim": "00:00:00:00"},
+                "video": {
+                    "codec id": "apch",
+                    "bit rate": "172557886",
+                    "width": "720",
+                    "height": "480",
+                    "display aspect ratio": "1.778",
+                    "frame rate": "29.970",
+                    "chroma subsampling": "4:2:2",
+                    "scan type": "Progressive",
+                },
+                "audio": {
+                    "format": "PCM",
+                    "bit rate": "1536000",
+                    "channel s": "2",
+                    "sampling rate": "44100",
+                    "bit depth": "16",
+                },
+            },
+        }
+        checks = scanner.evaluate_record(asset, fobj)
+        self.assertEqual(scanner.verdict_from_checks(checks), "WARNING")
+        self.assertTrue(any(check.check_id == "resolution" and check.status == "warning" and check.value == "720x480" for check in checks))
+        self.assertTrue(any(check.check_id == "audio_bitrate" and check.status == "warning" for check in checks))
+        self.assertTrue(any(check.check_id == "audio_sample_rate" and check.status == "warning" for check in checks))
+        self.assertTrue(any(check.check_id == "audio_bit_depth" and check.status == "warning" for check in checks))
+        self.assertFalse(any(check.status == "fail" for check in checks))
+
     def test_write_xlsx(self):
         row = scanner.ScanRow(
-            verdict="PASS",
+            verdict="FAIL",
             asset_title="Title",
             asset_id="asset-1",
             iconik_url="https://app.iconik.io/asset/asset-1",
@@ -161,11 +194,11 @@ class ScannerTests(unittest.TestCase):
             s3_uri="s3://bucket/title.mov",
             upload_date="2026-01-01T00:00:00Z",
             file_size="1.00 GB",
-            checks=[
-                scanner.CheckResult(check_id, label, "pass", "ok", target)
-                for check_id, label, target in scanner.CHECK_DEFS
-            ],
+            checks=[scanner.CheckResult(check_id, label, "pass", "ok", target) for check_id, label, target in scanner.CHECK_DEFS],
         )
+        row.checks[0] = scanner.CheckResult("file_type", "File type", "warning", "mp4", ".mov; .mp4 warning", "MP4 warning.")
+        row.checks[1] = scanner.CheckResult("video_codec", "Video codec", "fail", "H.264", "ProRes 422 HQ / apch", "Expected ProRes.")
+        row.checks[2] = scanner.CheckResult("video_bitrate", "Video bit rate", "missing", "missing", ">= 145 Mb/s", "Video bit rate missing.")
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "report.xlsx")
             scanner.write_xlsx([row], path, "s3://bucket/")
@@ -174,8 +207,17 @@ class ScannerTests(unittest.TestCase):
                 names = set(zf.namelist())
                 self.assertIn("xl/worksheets/sheet2.xml", names)
                 sheet = zf.read("xl/worksheets/sheet2.xml").decode("utf-8")
-                self.assertIn("PASS", sheet)
+                self.assertIn("FAIL", sheet)
+                self.assertIn("Reason", sheet)
+                self.assertIn("File type (WARNING: mp4)", sheet)
+                self.assertIn("Video codec (FAIL: H.264)", sheet)
+                self.assertIn("Video bit rate (MISSING INFO: missing)", sheet)
                 self.assertIn("Upload Date", sheet)
+                self.assertIn('<autoFilter ref="A1:V1"/>', sheet)
+                self.assertIn('<c r="B2" t="inlineStr" s="4">', sheet)
+                self.assertIn('<c r="I2" t="inlineStr" s="3">', sheet)
+                self.assertIn('<c r="J2" t="inlineStr" s="4">', sheet)
+                self.assertIn('<c r="K2" t="inlineStr" s="5">', sheet)
 
     def test_unmatched_s3_row_uses_inventory_date(self):
         item = scanner.S3InventoryObject(
