@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.9
+
+- Added a macOS temporary-launch guard for app translocation/private-folder launches.
+- Added an install-and-relaunch dialog that copies the app to the user's Applications folder and removes quarantine metadata.
+- Blocked scans when the app is running from a temporary `/private/var/folders` location to prevent long-run crashes caused by macOS unmounting the backing app image.
+- Updated public/download instructions to open the installed app before scanning.
+
 ## V1.8
 
 - Added configurable QC check rules in Settings with per-field ignore checkboxes.

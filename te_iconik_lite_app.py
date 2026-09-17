@@ -21,7 +21,7 @@ import te_iconik_scanner as scanner
 
 
 APP_NAME = "TE Tool - Iconik Lite Version"
-VERSION = "V1.8"
+VERSION = "V1.9"
 CONFIG_DIR = Path.home() / "Library" / "Application Support" / "TE Tool Iconik Lite"
 CONFIG_PATH = CONFIG_DIR / "settings.json"
 KEYCHAIN_SERVICE = "TE Tool Iconik Lite"
@@ -150,6 +150,65 @@ def apply_aws_environment(settings: Dict[str, str]) -> None:
             os.environ[key] = value
         elif key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
             os.environ.pop(key, None)
+
+
+def current_app_bundle_path() -> Optional[Path]:
+    executable = Path(sys.executable).resolve()
+    for path in (executable, *executable.parents):
+        if path.suffix == ".app":
+            return path
+    return None
+
+
+def is_unstable_launch_path(bundle_path: Optional[Path]) -> bool:
+    if not bundle_path:
+        return False
+    text = str(bundle_path)
+    return text.startswith("/private/var/folders/") or text.startswith("/var/folders/") or "/AppTranslocation/" in text
+
+
+class LaunchLocationDialog(tk.Toplevel):
+    def __init__(self, parent: "IconikLiteApp") -> None:
+        super().__init__(parent)
+        self.parent_app = parent
+        self.title("Install App Before Scanning")
+        self.geometry("720x320")
+        self.minsize(660, 300)
+        self.configure(background=APP_BG)
+        self.transient(parent)
+        self.grab_set()
+        self._build()
+
+    def _build(self) -> None:
+        outer = ttk.Frame(self, padding=18)
+        outer.pack(fill=tk.BOTH, expand=True)
+        outer.columnconfigure(0, weight=1)
+
+        ttk.Label(outer, text="Move the app before scanning", font=("Arial", 17, "bold")).grid(row=0, column=0, sticky="w")
+        message = (
+            "macOS is running this app from a temporary private folder. Long scans can crash if that temporary app mount is cleaned up or unmounted.\n\n"
+            "Install it into your Applications folder, then reopen it from there before scanning S3/Iconik targets."
+        )
+        ttk.Label(outer, text=message, wraplength=660).grid(row=1, column=0, sticky="ew", pady=(12, 0))
+
+        path_text = str(self.parent_app.app_bundle_path or "")
+        if path_text:
+            ttk.Label(outer, text=f"Current temporary path: {path_text}", style="Muted.TLabel", wraplength=660).grid(
+                row=2,
+                column=0,
+                sticky="ew",
+                pady=(10, 0),
+            )
+
+        actions = ttk.Frame(outer)
+        actions.grid(row=3, column=0, sticky="ew", pady=(18, 0))
+        actions.columnconfigure(0, weight=1)
+        ttk.Button(actions, text="Install to Applications and Relaunch", command=self._install).grid(row=0, column=0, sticky="w")
+        ttk.Button(actions, text="Quit", command=self.parent_app.destroy).grid(row=0, column=1, padx=(8, 0))
+        ttk.Button(actions, text="Not Now", command=self.destroy).grid(row=0, column=2, padx=(8, 0))
+
+    def _install(self) -> None:
+        self.parent_app.install_to_user_applications()
 
 
 class CheckRulesDialog(tk.Toplevel):
@@ -481,6 +540,9 @@ class IconikLiteApp(tk.Tk):
         self.pause_requested = threading.Event()
         self.stop_requested = threading.Event()
         self._pause_logged = False
+        self.app_bundle_path = current_app_bundle_path()
+        self.unstable_launch_path = is_unstable_launch_path(self.app_bundle_path)
+        self.launch_warning_shown = False
 
         self.target_var = tk.StringVar(value="")
         self.output_path_var = tk.StringVar(value=default_output_path())
@@ -492,6 +554,9 @@ class IconikLiteApp(tk.Tk):
         self.load_settings()
         self._build()
         self._set_scan_controls(False)
+        if self.unstable_launch_path:
+            self.set_status("Install the app to Applications before scanning. This copy is running from a temporary macOS location.")
+            self.after(500, self.show_launch_location_warning)
         self.after(100, self._drain_queue)
 
     def load_settings(self) -> None:
@@ -646,6 +711,30 @@ class IconikLiteApp(tk.Tk):
     def open_settings(self) -> None:
         SettingsDialog(self)
 
+    def show_launch_location_warning(self, force: bool = False) -> None:
+        if (self.launch_warning_shown and not force) or not self.unstable_launch_path:
+            return
+        self.launch_warning_shown = True
+        LaunchLocationDialog(self)
+
+    def install_to_user_applications(self) -> None:
+        if not self.app_bundle_path or not self.app_bundle_path.exists():
+            messagebox.showerror("Could Not Install", "Could not find the running app bundle to install.", parent=self)
+            return
+        destination_dir = Path.home() / "Applications"
+        destination = destination_dir / self.app_bundle_path.name
+        try:
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            if destination.exists():
+                shutil.rmtree(destination)
+            shutil.copytree(self.app_bundle_path, destination, symlinks=True)
+            subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(destination)], capture_output=True, text=True, check=False)
+            subprocess.Popen(["open", str(destination)])
+        except Exception as exc:  # pylint: disable=broad-except
+            messagebox.showerror("Could Not Install", str(exc), parent=self)
+            return
+        self.destroy()
+
     def choose_output(self) -> None:
         path = filedialog.asksaveasfilename(
             parent=self,
@@ -661,6 +750,10 @@ class IconikLiteApp(tk.Tk):
             ConfigStore.save(cfg)
 
     def scan(self) -> None:
+        if self.unstable_launch_path:
+            self.show_launch_location_warning(force=True)
+            self.set_status("Scan blocked until the app is installed outside the temporary macOS launch location.")
+            return
         target = self.target_var.get().strip()
         if not target:
             messagebox.showerror("Missing Target", "Paste an S3 path or Iconik link first.", parent=self)

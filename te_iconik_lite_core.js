@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "V1.8";
+  const VERSION = "V1.9";
   const MIN_VIDEO_BITRATE = 145000000;
 
   const CHECKS = [

@@ -4,25 +4,28 @@ TE Tool - Iconik Lite Version is a plug-and-play macOS app for SVOD technical me
 
 ## Version
 
-Current public version: `V1.8`
+Current public version: `V1.9`
 
 ## Download
 
 - Public page: https://michaelbrandonfalk.github.io/te-tool-iconik-lite-version/
-- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_8.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.8/TE.Tool.Iconik.Lite.Version.V1_8.macOS.Apple.Silicon.zip)
+- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_9.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.9/TE.Tool.Iconik.Lite.Version.V1_9.macOS.Apple.Silicon.zip)
 
 ## App Workflow
 
 1. Download and unzip the Mac app.
-2. Open `TE Tool Iconik Lite Version V1_8.app`.
-3. Open Settings and save AWS credentials for S3 scans.
-4. Save Iconik App-ID/Auth-Token for Iconik links and metadata lookups.
-5. Click **Test Iconik** in Settings to confirm the API connection.
-6. Optional: open **Edit QC Checks...** in Settings to ignore fields or adjust pass/warning/fail criteria.
-7. Paste an S3 bucket, folder, file path, Iconik collection link, Iconik asset link, or asset UUID.
-8. Click Scan. Use Pause, Resume, or Stop during long bucket scans.
+2. Open `TE Tool Iconik Lite Version V1_9.app`.
+3. If macOS says the app is running from a temporary private folder, click **Install to Applications and Relaunch**.
+4. Open Settings and save AWS credentials for S3 scans.
+5. Save Iconik App-ID/Auth-Token for Iconik links and metadata lookups.
+6. Click **Test Iconik** in Settings to confirm the API connection.
+7. Optional: open **Edit QC Checks...** in Settings to ignore fields or adjust pass/warning/fail criteria.
+8. Paste an S3 bucket, folder, file path, Iconik collection link, Iconik asset link, or asset UUID.
+9. Click Scan. Use Pause, Resume, or Stop during long bucket scans.
 
 The app lists each video, retrieves Iconik metadata, applies the SVOD checks, displays PASS/WARNING/MISSING INFO/FAIL results, and writes a pastel-coded XLSX report with upload date, S3/storage path, Iconik URL, and every check field.
+
+V1.9 blocks scans when macOS launches the app from a temporary translocated/private folder, because that can be unmounted during long scans and crash the app. Use the in-app install dialog or move the app to Applications before scanning.
 
 ## Supported Targets
 
@@ -43,7 +46,7 @@ The app lists each video, retrieves Iconik metadata, applies the SVOD checks, di
 
 ## What It Checks
 
-V1.8 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
+V1.9 is SVOD only. It checks fields that Iconik/MediaInfo metadata can expose without sampling the media:
 
 - lowercase `.mov` file type, matching TE Tool's case-sensitive check
 - `.mp4` file type as a warning, not a hard fail
@@ -88,13 +91,13 @@ The public web page still includes a small browser-only metadata text checker. I
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_8_mac.sh
+./build_te_tool_iconik_lite_v1_9_mac.sh
 ```
 
 The script creates:
 
-- `dist/TE Tool Iconik Lite Version V1_8.app`
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_8.macOS.Apple.Silicon.zip`
+- `dist/TE Tool Iconik Lite Version V1_9.app`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_9.macOS.Apple.Silicon.zip`
 
 ## Versioning
 
