@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "V1.10";
+  const VERSION = "V1.11";
 
   const CHECKS = [
     {

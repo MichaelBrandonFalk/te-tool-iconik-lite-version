@@ -1,5 +1,11 @@
 # Changelog
 
+## V1.11
+
+- Fixed a macOS Tk/Tcl crash by preventing background worker threads from touching Tk variables or scheduling Tk callbacks directly.
+- Captured the XLSX output path on the main UI thread before starting a scan.
+- Routed Iconik credential-test results through a plain Python queue so Settings updates happen on the main UI thread.
+
 ## V1.10
 
 - Added named QC check profiles in Settings, including save current profile, save as, delete custom profile, and restore shipped defaults.

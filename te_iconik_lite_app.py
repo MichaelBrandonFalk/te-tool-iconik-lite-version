@@ -21,7 +21,7 @@ import te_iconik_scanner as scanner
 
 
 APP_NAME = "TE Tool - Iconik Lite Version"
-VERSION = "V1.10"
+VERSION = "V1.11"
 CONFIG_DIR = Path.home() / "Library" / "Application Support" / "TE Tool Iconik Lite"
 CONFIG_PATH = CONFIG_DIR / "settings.json"
 KEYCHAIN_SERVICE = "TE Tool Iconik Lite"
@@ -352,6 +352,7 @@ class SettingsDialog(tk.Toplevel):
         self.output_path_var = tk.StringVar(value=str(cfg.get("output_path") or default_output_path()))
         self.auto_save_var = tk.BooleanVar(value=bool(cfg.get("save_xlsx_automatically", True)))
         self.test_status_var = tk.StringVar(value="")
+        self.test_queue: "queue.Queue[str]" = queue.Queue()
         self.check_profiles = scanner.normalize_check_profile_library(cfg.get("check_profiles"), cfg.get("check_profile"))
         self.active_check_profile_name = scanner.active_check_profile_name(cfg.get("active_check_profile"), self.check_profiles)
         self.profile_name_var = tk.StringVar(value=self.active_check_profile_name)
@@ -361,6 +362,7 @@ class SettingsDialog(tk.Toplevel):
 
         self.secret_entries: List[ttk.Entry] = []
         self._build()
+        self.after(100, self._drain_test_queue)
 
     def _build(self) -> None:
         outer = ttk.Frame(self, padding=16)
@@ -556,10 +558,19 @@ class SettingsDialog(tk.Toplevel):
             message = "Iconik API test passed."
             if total is not None:
                 message += f" Visible storage records: {total}."
-            self.after(0, lambda: self.test_status_var.set(message))
+            self.test_queue.put(message)
         except Exception as exc:  # pylint: disable=broad-except
             message = f"Iconik API test failed: {exc}"
-            self.after(0, lambda: self.test_status_var.set(message))
+            self.test_queue.put(message)
+
+    def _drain_test_queue(self) -> None:
+        try:
+            while True:
+                self.test_status_var.set(self.test_queue.get_nowait())
+        except queue.Empty:
+            pass
+        if self.winfo_exists():
+            self.after(100, self._drain_test_queue)
 
     def _save(self) -> None:
         try:
@@ -875,11 +886,12 @@ class IconikLiteApp(tk.Tk):
         self._set_scan_controls(True)
         self._append_log(f"Target: {target}")
 
-        thread = threading.Thread(target=self._scan_worker, args=(target, target_type), daemon=True)
+        output_path = self.output_path_var.get().strip() or default_output_path()
+        thread = threading.Thread(target=self._scan_worker, args=(target, target_type, output_path), daemon=True)
         self.scan_thread = thread
         thread.start()
 
-    def _scan_worker(self, target: str, target_type: str) -> None:
+    def _scan_worker(self, target: str, target_type: str, output_path: str) -> None:
         try:
             self.result_queue.put(("log", "Loading saved credentials..."))
             apply_aws_environment(self.settings)
@@ -899,7 +911,6 @@ class IconikLiteApp(tk.Tk):
             if self.stop_requested.is_set():
                 raise scanner.ScanStopped("Scan stopped by user.")
 
-            output_path = self.output_path_var.get().strip() or default_output_path()
             if self.settings.get("save_xlsx_automatically", True):
                 self.result_queue.put(("log", f"Writing XLSX report: {output_path}"))
                 scanner.write_xlsx(rows, output_path, target, str(self.settings.get("active_check_profile") or ""))

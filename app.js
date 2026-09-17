@@ -227,11 +227,11 @@
   }
 
   function exportCsv() {
-    download("te_tool_iconik_lite_results_v1_10.csv", TeIconikLite.toCsv(state.results), "text/csv");
+    download("te_tool_iconik_lite_results_v1_11.csv", TeIconikLite.toCsv(state.results), "text/csv");
   }
 
   function exportJson() {
-    download("te_tool_iconik_lite_results_v1_10.json", JSON.stringify(state.results, null, 2), "application/json");
+    download("te_tool_iconik_lite_results_v1_11.json", JSON.stringify(state.results, null, 2), "application/json");
   }
 
   function download(name, content, type) {
