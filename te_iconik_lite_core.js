@@ -1,51 +1,37 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "V1.9";
-  const MIN_VIDEO_BITRATE = 145000000;
+  const VERSION = "V1.10";
 
   const CHECKS = [
     {
       id: "file_type",
       label: "File type",
-      target: ".mov; .mp4 warning",
+      target: ".mov or high-bitrate .mp4",
       evaluate: (m) => {
         const ext = cleanExtension(first(m, ["general.file extension", "summary.format extension", "file extension"]));
         if (!ext) return missing("missing", "File extension was not available.");
-        if (ext === "mov") return pass(ext);
-        if (ext === "mp4") return warn(ext, "MP4 is accepted as a warning for SVOD review.");
-        return fail(ext, "Expected .mov file extension. MP4 is a warning.");
+        if (ext === "mov" || ext === "mp4") return pass(ext);
+        return fail(ext, "Expected .mov or accepted high-bitrate .mp4.");
       },
     },
     {
       id: "video_codec",
       label: "Video codec",
-      target: "ProRes 422 HQ / apch",
+      target: "ProRes 422 HQ or native high-bitrate MP4 codec",
       evaluate: (m) => {
         const codecId = lower(first(m, ["video.codec id", "video.codec_tag_string", "codec id", "codec_tag_string", "video codec"]));
         const display = displayCodec(m);
         if (!codecId && display === "missing") return missing("missing", "Video codec was not available.");
-        const ok = codecId === "apch" || lower(display).includes("prores");
-        return ok ? pass(display) : fail(display, "Expected ProRes 422 HQ.");
-      },
-    },
-    {
-      id: "video_bitrate",
-      label: "Video bit rate",
-      target: ">= 145 Mb/s",
-      evaluate: (m) => {
-        const raw = first(m, ["video.bit rate", "video bitrate", "overall bit rate"]);
-        const value = parseNumber(raw);
-        if (!Number.isFinite(value)) return missing("missing", "Video bit rate was not available.");
-        return value >= MIN_VIDEO_BITRATE
-          ? pass(formatMbps(value))
-          : fail(formatMbps(value), "Expected at least 145 Mb/s.");
+        const text = lower(`${codecId} ${display}`);
+        const ok = ["apch", "prores", "h264", "h.264", "avc", "avc1", "hevc", "h265", "h.265"].some((part) => text.includes(part));
+        return ok ? pass(display) : fail(display, "Expected ProRes 422 HQ or common native MP4 codec metadata.");
       },
     },
     {
       id: "resolution",
       label: "Resolution",
-      target: "1920x1080",
+      target: "HD 1920x1080 or SD min 480p",
       evaluate: (m) => {
         const width = parseNumber(first(m, ["video.width", "width"]));
         const height = parseNumber(first(m, ["video.height", "height"]));
@@ -55,14 +41,14 @@
         if (!Number.isFinite(finalWidth) || !Number.isFinite(finalHeight)) return missing("missing", "Resolution was not available.");
         const value = `${finalWidth}x${finalHeight}`;
         if (finalWidth === 1920 && finalHeight === 1080) return pass(value);
-        if (finalWidth === 720 && finalHeight === 480) return warn(value, "720x480 is accepted as a warning for SVOD review.");
-        return fail(value, "Expected exactly 1920x1080.");
+        if (Math.min(finalWidth, finalHeight) >= 480 && Math.max(finalWidth, finalHeight) <= 1024) return pass(value);
+        return fail(value, "Expected HD 1920x1080 or SD at least 480p.");
       },
     },
     {
       id: "aspect_ratio",
       label: "Aspect ratio",
-      target: "16:9",
+      target: "HD 16:9 or SD 4:3",
       evaluate: (m) => {
         const raw = first(m, ["video.display aspect ratio string", "video.display aspect ratio", "display aspect ratio"]);
         const width = parseNumber(first(m, ["video.width", "width"]));
@@ -73,31 +59,24 @@
         const ratio = parseRatio(raw);
         const calculated = finalWidth && finalHeight ? finalWidth / finalHeight : NaN;
         if (!raw && !Number.isFinite(calculated)) return missing("missing", "Aspect ratio or resolution was not available.");
-        const ok = raw === "16:9" || within(ratio, 1.76, 1.79) || within(calculated, 1.76, 1.79);
-        return ok ? pass(raw || calculated.toFixed(3)) : fail(raw || "missing", "Expected 16:9.");
+        const isHd = finalWidth === 1920 && finalHeight === 1080;
+        const isSd = finalWidth && finalHeight && Math.min(finalWidth, finalHeight) >= 480 && Math.max(finalWidth, finalHeight) <= 1024;
+        const hdOk = raw === "16:9" || within(ratio, 1.76, 1.79) || within(calculated, 1.76, 1.79);
+        const sdOk = raw === "4:3" || within(ratio, 1.32, 1.34) || within(calculated, 1.32, 1.34);
+        const ok = isHd ? hdOk : isSd ? sdOk : hdOk || sdOk;
+        return ok ? pass(raw || calculated.toFixed(3)) : fail(raw || "missing", "Expected HD 16:9 or SD 4:3.");
       },
     },
     {
-      id: "frame_rate",
-      label: "Frame rate",
-      target: "23.98 or 29.97 fps",
+      id: "pixel_aspect_ratio",
+      label: "Pixel aspect ratio",
+      target: "1:1",
       evaluate: (m) => {
-        const value = parseFrameRate(first(m, ["video.r_frame_rate", "r_frame_rate", "video.frame rate", "video framerate", "frame rate", "video.frame rate string"]));
-        if (!Number.isFinite(value)) return missing("missing", "Frame rate was not available.");
-        const rounded = roundFrameRate(value);
-        if (rounded === "23.98" || rounded === "29.97") return pass(`${rounded} fps`);
-        return fail(`${rounded} fps`, "Expected 23.98 or 29.97 fps for SVOD.");
-      },
-    },
-    {
-      id: "chroma",
-      label: "Chroma sampling",
-      target: "4:2:2",
-      evaluate: (m) => {
-        const value = first(m, ["video.chroma subsampling", "video chroma subsampling", "video.chroma subsampling string", "video.pixel format", "video.pix_fmt"]);
-        if (!value) return missing("missing", "Chroma sampling was not available.");
-        const ok = lower(value).includes("4:2:2") || lower(value).startsWith("yuv422");
-        return ok ? pass(value) : fail(value || "missing", "Expected 4:2:2 chroma.");
+        const value = first(m, ["video.pixel aspect ratio", "pixel aspect ratio", "sample aspect ratio", "video.sample aspect ratio"]);
+        const ratio = parseRatio(value);
+        if (!value && !Number.isFinite(ratio)) return missing("missing", "Pixel aspect ratio was not available.");
+        const ok = value === "1:1" || within(ratio, 0.995, 1.005);
+        return ok ? pass(value || ratio.toFixed(3)) : fail(value || "missing", "Expected square pixels / 1:1.");
       },
     },
     {
@@ -113,59 +92,28 @@
       },
     },
     {
-      id: "audio_codec",
-      label: "Audio codec",
-      target: "PCM",
+      id: "color_space",
+      label: "Color space",
+      target: "SDR Rec.709",
       evaluate: (m) => {
-        const value = first(m, ["audio.codec", "audio.format", "audio.commercial name", "audio codecs", "audio format list", "audio codec"]);
-        if (!value) return missing("missing", "Audio codec was not available.");
-        return lower(value).startsWith("pcm") || lower(value).includes("pcm")
+        const values = [
+          first(m, ["video.color space", "color space", "colour space"]),
+          first(m, ["video.color primaries", "color primaries", "colour primaries"]),
+          first(m, ["video.matrix coefficients", "matrix coefficients"]),
+          first(m, ["video.transfer characteristics", "transfer characteristics"]),
+        ].filter(Boolean);
+        const value = [...new Set(values)].join(" / ");
+        if (!value) return missing("missing", "Color space / Rec.709 metadata was not available.");
+        const ok = ["rec.709", "bt.709", "bt709", "709", "sdr"].some((part) => lower(value).includes(part));
+        return ok && !containsHdrColorSignal(value)
           ? pass(value)
-          : fail(value || "missing", "Expected PCM audio.");
-      },
-    },
-    {
-      id: "audio_bitrate",
-      label: "Audio bit rate",
-      target: "channels x 1,152 kb/s",
-      evaluate: (m) => {
-        const channels = parseNumber(first(m, ["audio.channel s", "audio.channels", "audio channels", "audio channels total"]));
-        const bitrate = parseNumber(first(m, ["audio.bit rate", "audio bit rate"]));
-        if (!Number.isFinite(channels) || !Number.isFinite(bitrate)) return missing("missing", "Audio channels or bit rate was not available.");
-        const expected = channels * 1152000;
-        return bitrate === expected
-          ? pass(formatKbps(bitrate))
-          : warn(formatKbps(bitrate), `Expected ${formatKbps(expected)} for ${channels} channel(s).`);
-      },
-    },
-    {
-      id: "audio_sample_rate",
-      label: "Audio sample rate",
-      target: "48 kHz",
-      evaluate: (m) => {
-        const value = parseNumber(first(m, ["audio.sampling rate", "audio sample rate", "audio.sample rate"]));
-        if (!Number.isFinite(value)) return missing("missing", "Audio sample rate was not available.");
-        return value === 48000
-          ? pass("48 kHz")
-          : warn(value ? `${value} Hz` : "missing", "Expected 48000 Hz.");
-      },
-    },
-    {
-      id: "audio_bit_depth",
-      label: "Audio bit depth",
-      target: "24-bit",
-      evaluate: (m) => {
-        const value = parseNumber(first(m, ["audio.bit depth", "audio bit depth"]));
-        if (!Number.isFinite(value)) return missing("missing", "Audio bit depth was not available.");
-        return value === 24
-          ? pass("24 bits")
-          : warn(value ? `${value} bits` : "missing", "Expected 24-bit PCM.");
+          : fail(value || "missing", "Expected SDR Rec.709 color metadata.");
       },
     },
     {
       id: "stereo_only",
-      label: "Stereo only",
-      target: "1 stream, 2 channels",
+      label: "Audio mapping / stereo",
+      target: "Track 1 stereo interleaved L+R",
       evaluate: (m) => {
         const streams = parseNumber(first(m, ["general.count of audio streams", "count of audio streams"]));
         const channels = parseNumber(first(m, ["audio.channel s", "audio.channels", "audio channels", "audio channels total"]));
@@ -174,6 +122,42 @@
         const channelOk = channels === 2;
         if (streamOk && channelOk) return pass(`${streams || 1} stream, ${channels} channels`);
         return fail(`${streams || "?"} stream, ${channels || "?"} channels`, "Expected one stereo audio stream.");
+      },
+    },
+    {
+      id: "audio_language",
+      label: "Audio language",
+      target: "One language per file",
+      evaluate: (m) => {
+        const value = first(m, ["audio.language", "language", "audio language"]);
+        if (!value) return missing("missing", "Audio language metadata was not available.");
+        const languages = languageValues(value);
+        if (languages.length === 1) return pass(languages[0]);
+        return fail(languages.join(", ") || value, "Expected one language per video file.");
+      },
+    },
+    {
+      id: "loudness",
+      label: "Loudness",
+      target: "-24 LKFS +/- 2",
+      evaluate: (m) => {
+        const value = parseFloatNumber(first(m, ["audio.loudness", "loudness", "integrated loudness", "audio.integrated loudness"]));
+        if (!Number.isFinite(value)) return missing("missing", "Integrated loudness metadata was not available.");
+        return value >= -26 && value <= -22
+          ? pass(formatMeasurement(value, "LKFS"))
+          : fail(formatMeasurement(value, "LKFS"), "Expected -24 LKFS with +/- 2 tolerance.");
+      },
+    },
+    {
+      id: "true_peak",
+      label: "True peak",
+      target: "<= -2 dBTP",
+      evaluate: (m) => {
+        const value = parseFloatNumber(first(m, ["audio.true peak", "true peak", "audio.true_peak", "true_peak"]));
+        if (!Number.isFinite(value)) return missing("missing", "True peak metadata was not available.");
+        return value <= -2
+          ? pass(formatMeasurement(value, "dBTP"))
+          : fail(formatMeasurement(value, "dBTP"), "Expected true peak at or below -2 dBTP.");
       },
     },
     {
@@ -294,6 +278,19 @@
     return Math.round(number);
   }
 
+  function parseFloatNumber(value) {
+    if (value === undefined || value === null) return NaN;
+    const cleaned = String(value).replace(/,/g, "").replace(/\s+/g, " ").trim();
+    const match = cleaned.match(/-?\d+(?:\.\d+)?/);
+    if (!match) return NaN;
+    let number = Number(match[0]);
+    const lowerValue = cleaned.toLowerCase();
+    if (lowerValue.includes("mb/s")) number *= 1000000;
+    if (lowerValue.includes("kb/s")) number *= 1000;
+    if (lowerValue.includes("khz")) number *= 1000;
+    return number;
+  }
+
   function parseFrameRate(value) {
     const raw = String(value || "").trim();
     const fraction = raw.match(/(\d+)\s*\/\s*(\d+)/);
@@ -345,12 +342,30 @@
     return String(value || "").trim().toLowerCase();
   }
 
+  function containsHdrColorSignal(value) {
+    const text = lower(value);
+    return ["bt.2020", "bt2020", "2020", "pq", "smpte st 2084", "hlg", "hdr"].some((part) => text.includes(part));
+  }
+
   function formatMbps(value) {
     return `${(value / 1000000).toFixed(1)} Mb/s`;
   }
 
   function formatKbps(value) {
     return `${Math.round(value / 1000).toLocaleString("en-US")} kb/s`;
+  }
+
+  function formatMeasurement(value, unit) {
+    const text = Number(value).toFixed(2).replace(/\.?0+$/, "");
+    return `${text} ${unit}`;
+  }
+
+  function languageValues(value) {
+    const ignored = new Set(["", "und", "undefined", "unknown", "n/a", "none", "not reported"]);
+    return [...new Set(String(value || "")
+      .split(/[,|;/]+/)
+      .map((part) => part.trim().toLowerCase())
+      .filter((part) => !ignored.has(part)))].sort();
   }
 
   function pass(value, note = "") {

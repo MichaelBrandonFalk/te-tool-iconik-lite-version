@@ -1,5 +1,14 @@
 # Changelog
 
+## V1.10
+
+- Added named QC check profiles in Settings, including save current profile, save as, delete custom profile, and restore shipped defaults.
+- Made **VOD Technical Delivery Specification 2026_09_17** the shipped default profile.
+- Added **Original TE CHECK - Strict** and **TE Tool Lite V1.9 SVOD** as selectable shipped profiles.
+- Updated the default checks to match the metadata-visible parts of the current VOD spec: MOV/MP4 acceptance, HD or SD resolution, HD/SD aspect ratio rules, pixel aspect ratio, progressive scan, SDR Rec.709, stereo mapping, one language, loudness, true peak, and zero start timecode.
+- Kept older TE-only checks such as 145 Mb/s video bit rate, frame rate, 4:2:2 chroma, PCM, sample rate, and bit depth in the strict/legacy profiles instead of the default VOD profile.
+- Added the active check profile name to the XLSX Summary sheet.
+
 ## V1.9
 
 - Added a macOS temporary-launch guard for app translocation/private-folder launches.

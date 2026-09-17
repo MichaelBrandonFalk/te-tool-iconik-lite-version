@@ -15,13 +15,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 import te_iconik_scanner as scanner
 
 
 APP_NAME = "TE Tool - Iconik Lite Version"
-VERSION = "V1.9"
+VERSION = "V1.10"
 CONFIG_DIR = Path.home() / "Library" / "Application Support" / "TE Tool Iconik Lite"
 CONFIG_PATH = CONFIG_DIR / "settings.json"
 KEYCHAIN_SERVICE = "TE Tool Iconik Lite"
@@ -57,12 +57,15 @@ class ConfigStore:
     @staticmethod
     def save(data: Dict[str, Any]) -> None:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        profiles = scanner.normalize_check_profile_library(data.get("check_profiles"), data.get("check_profile"))
+        active_profile = scanner.active_check_profile_name(data.get("active_check_profile"), profiles)
         safe = {
             "host": str(data.get("host") or DEFAULT_HOST).strip().rstrip("/") or DEFAULT_HOST,
             "aws_region": str(data.get("aws_region") or DEFAULT_REGION).strip() or DEFAULT_REGION,
             "output_path": str(data.get("output_path") or default_output_path()),
             "save_xlsx_automatically": bool(data.get("save_xlsx_automatically", True)),
-            "check_profile": scanner.normalize_check_profile(data.get("check_profile")),
+            "active_check_profile": active_profile,
+            "check_profiles": profiles,
         }
         tmp = CONFIG_PATH.with_suffix(".json.tmp")
         with tmp.open("w", encoding="utf-8") as handle:
@@ -232,7 +235,7 @@ class CheckRulesDialog(tk.Toplevel):
         outer.rowconfigure(1, weight=1)
 
         intro = (
-            "Adjust the shipped SVOD check profile. Uncheck a row to ignore that field. "
+            "Adjust the selected QC check profile. Uncheck a row to ignore that field. "
             "Use comma-separated values for lists, such as 23.98, 29.97, or type anything else in Warning to make all non-pass values warnings."
         )
         ttk.Label(outer, text=intro, wraplength=1000).grid(row=0, column=0, sticky="ew")
@@ -317,11 +320,13 @@ class CheckRulesDialog(tk.Toplevel):
         return scanner.normalize_check_profile(profile)
 
     def _restore_defaults(self) -> None:
-        self._load_profile(scanner.default_check_profile())
+        self._load_profile(scanner.default_check_profile(self.settings_dialog.profile_name_var.get()))
 
     def _apply(self) -> None:
         self.settings_dialog.check_profile = self._profile_from_vars()
-        self.settings_dialog.rules_status_var.set("QC check rules updated. Click Save Settings to keep them.")
+        name = self.settings_dialog.profile_name_var.get().strip() or scanner.OFFICIAL_VOD_PROFILE_NAME
+        self.settings_dialog.check_profiles[name] = self.settings_dialog.check_profile
+        self.settings_dialog.rules_status_var.set(f"QC check rules updated for {name}. Click Save Settings to keep them.")
         self.destroy()
 
 
@@ -330,8 +335,8 @@ class SettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.parent_app = parent
         self.title("Settings")
-        self.geometry("1040x680")
-        self.minsize(960, 600)
+        self.geometry("1120x760")
+        self.minsize(1040, 720)
         self.configure(background=APP_BG)
         self.transient(parent)
         self.grab_set()
@@ -347,8 +352,11 @@ class SettingsDialog(tk.Toplevel):
         self.output_path_var = tk.StringVar(value=str(cfg.get("output_path") or default_output_path()))
         self.auto_save_var = tk.BooleanVar(value=bool(cfg.get("save_xlsx_automatically", True)))
         self.test_status_var = tk.StringVar(value="")
-        self.check_profile = scanner.normalize_check_profile(cfg.get("check_profile"))
-        self.rules_status_var = tk.StringVar(value="Using saved QC check rules.")
+        self.check_profiles = scanner.normalize_check_profile_library(cfg.get("check_profiles"), cfg.get("check_profile"))
+        self.active_check_profile_name = scanner.active_check_profile_name(cfg.get("active_check_profile"), self.check_profiles)
+        self.profile_name_var = tk.StringVar(value=self.active_check_profile_name)
+        self.check_profile = scanner.normalize_check_profile(self.check_profiles[self.active_check_profile_name])
+        self.rules_status_var = tk.StringVar(value=f"Using profile: {self.active_check_profile_name}")
         self.rule_vars: Dict[str, Dict[str, Any]] = {}
 
         self.secret_entries: List[ttk.Entry] = []
@@ -414,12 +422,33 @@ class SettingsDialog(tk.Toplevel):
             row=1, column=1, columnspan=2, sticky="w", pady=(8, 0)
         )
 
+        profiles = ttk.LabelFrame(outer, text="QC Check Profile", padding=12)
+        profiles.grid(row=4, column=0, sticky="ew", pady=(14, 0))
+        profiles.columnconfigure(1, weight=1)
+        ttk.Label(profiles, text="Active profile").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.profile_combo = ttk.Combobox(
+            profiles,
+            textvariable=self.profile_name_var,
+            values=self._profile_names(),
+            state="readonly",
+        )
+        self.profile_combo.grid(row=0, column=1, sticky="ew")
+        self.profile_combo.bind("<<ComboboxSelected>>", self._load_selected_profile)
+        ttk.Button(profiles, text="Save Profile", command=self._save_current_profile).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(profiles, text="Save As...", command=self._save_profile_as).grid(row=0, column=3, padx=(8, 0))
+        ttk.Button(profiles, text="Delete Custom", command=self._delete_current_profile).grid(row=0, column=4, padx=(8, 0))
+        ttk.Label(
+            profiles,
+            text="Use the official VOD 2026 profile by default, switch to strict TE checks when needed, or save your own named profiles.",
+            style="Muted.TLabel",
+        ).grid(row=1, column=0, columnspan=5, sticky="w", pady=(8, 0))
+
         actions = ttk.Frame(outer)
-        actions.grid(row=4, column=0, sticky="ew", pady=(16, 0))
+        actions.grid(row=5, column=0, sticky="ew", pady=(16, 0))
         actions.columnconfigure(0, weight=1)
         ttk.Button(actions, text="Reveal / Hide Secrets", command=self._toggle_secrets).grid(row=0, column=0, sticky="w")
         ttk.Button(actions, text="Edit QC Checks...", command=self._edit_check_rules).grid(row=0, column=1, padx=(8, 0))
-        ttk.Button(actions, text="Restore Check Defaults", command=self._restore_check_defaults).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(actions, text="Restore Profile Defaults", command=self._restore_check_defaults).grid(row=0, column=2, padx=(8, 0))
         ttk.Button(actions, text="Test Iconik", command=self._test_iconik).grid(row=0, column=3, padx=(8, 0))
         ttk.Button(actions, text="Remove Saved Credentials", command=self._remove_credentials).grid(row=1, column=0, sticky="w", pady=(10, 0))
         ttk.Button(actions, text="Cancel", command=self.destroy).grid(row=1, column=2, sticky="e", padx=(16, 0), pady=(10, 0))
@@ -431,6 +460,11 @@ class SettingsDialog(tk.Toplevel):
             sticky="w",
             pady=(8, 0),
         )
+
+    def _profile_names(self) -> List[str]:
+        builtin_order = list(scanner.builtin_check_profiles().keys())
+        custom_names = sorted(name for name in self.check_profiles if name not in builtin_order)
+        return [name for name in builtin_order if name in self.check_profiles] + custom_names
 
     def _secret_entry(self, parent: tk.Widget, variable: tk.StringVar) -> ttk.Entry:
         entry = ttk.Entry(parent, textvariable=variable, show="*")
@@ -456,8 +490,52 @@ class SettingsDialog(tk.Toplevel):
         CheckRulesDialog(self)
 
     def _restore_check_defaults(self) -> None:
-        self.check_profile = scanner.default_check_profile()
-        self.rules_status_var.set("QC check rules restored to shipped defaults. Click Save Settings to keep them.")
+        name = self.profile_name_var.get().strip() or scanner.OFFICIAL_VOD_PROFILE_NAME
+        self.check_profile = scanner.default_check_profile(name)
+        self.check_profiles[name] = self.check_profile
+        self.rules_status_var.set(f"Profile restored to shipped defaults: {name}. Click Save Settings to keep it.")
+
+    def _load_selected_profile(self, _event: Optional[tk.Event] = None) -> None:
+        name = self.profile_name_var.get().strip()
+        if not name:
+            return
+        self.check_profile = scanner.normalize_check_profile(self.check_profiles.get(name))
+        self.active_check_profile_name = name
+        self.rules_status_var.set(f"Loaded profile: {name}. Click Save Settings to keep it active.")
+
+    def _save_current_profile(self) -> None:
+        name = self.profile_name_var.get().strip() or scanner.OFFICIAL_VOD_PROFILE_NAME
+        self.check_profiles[name] = scanner.normalize_check_profile(self.check_profile)
+        self.active_check_profile_name = name
+        self.profile_combo.configure(values=self._profile_names())
+        self.rules_status_var.set(f"Saved profile: {name}. Click Save Settings to persist it.")
+
+    def _save_profile_as(self) -> None:
+        name = simpledialog.askstring("Save QC Profile As", "Profile name:", parent=self)
+        clean = str(name or "").strip()
+        if not clean:
+            return
+        self.check_profiles[clean] = scanner.normalize_check_profile(self.check_profile)
+        self.active_check_profile_name = clean
+        self.profile_name_var.set(clean)
+        self.profile_combo.configure(values=self._profile_names())
+        self.rules_status_var.set(f"Created profile: {clean}. Click Save Settings to persist it.")
+
+    def _delete_current_profile(self) -> None:
+        name = self.profile_name_var.get().strip()
+        if name in scanner.builtin_check_profiles():
+            messagebox.showerror("Cannot Delete Shipped Profile", "Shipped profiles can be restored but not deleted.", parent=self)
+            return
+        if not name or name not in self.check_profiles:
+            return
+        if not messagebox.askyesno("Delete QC Profile", f"Delete custom profile '{name}'?", parent=self):
+            return
+        self.check_profiles.pop(name, None)
+        self.active_check_profile_name = scanner.OFFICIAL_VOD_PROFILE_NAME
+        self.profile_name_var.set(self.active_check_profile_name)
+        self.check_profile = scanner.default_check_profile(self.active_check_profile_name)
+        self.profile_combo.configure(values=self._profile_names())
+        self.rules_status_var.set("Deleted custom profile. Official VOD profile is selected.")
 
     def _test_iconik(self) -> None:
         app_id = self.iconik_app_id_var.get().strip()
@@ -485,13 +563,16 @@ class SettingsDialog(tk.Toplevel):
 
     def _save(self) -> None:
         try:
+            active_profile = self.profile_name_var.get().strip() or scanner.OFFICIAL_VOD_PROFILE_NAME
+            self.check_profiles[active_profile] = scanner.normalize_check_profile(self.check_profile)
             ConfigStore.save(
                 {
                     "host": self.iconik_host_var.get(),
                     "aws_region": self.aws_region_var.get(),
                     "output_path": self.output_path_var.get(),
                     "save_xlsx_automatically": self.auto_save_var.get(),
-                    "check_profile": self.check_profile,
+                    "active_check_profile": active_profile,
+                    "check_profiles": self.check_profiles,
                 }
             )
             KeychainStore.set(KEY_ICONIK_APP_ID, self.iconik_app_id_var.get())
@@ -561,6 +642,8 @@ class IconikLiteApp(tk.Tk):
 
     def load_settings(self) -> None:
         cfg = ConfigStore.load()
+        profiles = scanner.normalize_check_profile_library(cfg.get("check_profiles"), cfg.get("check_profile"))
+        active_profile = scanner.active_check_profile_name(cfg.get("active_check_profile"), profiles)
         self.settings = {
             "host": str(cfg.get("host") or DEFAULT_HOST).strip().rstrip("/") or DEFAULT_HOST,
             "aws_region": str(cfg.get("aws_region") or DEFAULT_REGION).strip() or DEFAULT_REGION,
@@ -571,13 +654,16 @@ class IconikLiteApp(tk.Tk):
             "aws_access_key_id": KeychainStore.get(KEY_AWS_ACCESS_KEY_ID),
             "aws_secret_access_key": KeychainStore.get(KEY_AWS_SECRET_ACCESS_KEY),
             "aws_session_token": KeychainStore.get(KEY_AWS_SESSION_TOKEN),
-            "check_profile": scanner.normalize_check_profile(cfg.get("check_profile")),
+            "active_check_profile": active_profile,
+            "check_profiles": profiles,
+            "check_profile": scanner.normalize_check_profile(profiles[active_profile]),
         }
         self.current_output_path = self.settings["output_path"]
         self.output_path_var.set(self.current_output_path)
         parts = []
         parts.append("Iconik saved" if self.has_iconik_credentials() else "Iconik not saved")
         parts.append("AWS saved" if self.has_aws_credentials() else "AWS profile/Settings needed")
+        parts.append(f"Profile: {active_profile}")
         self.credential_status_var.set(" | ".join(parts))
 
     def has_iconik_credentials(self) -> bool:
@@ -816,7 +902,7 @@ class IconikLiteApp(tk.Tk):
             output_path = self.output_path_var.get().strip() or default_output_path()
             if self.settings.get("save_xlsx_automatically", True):
                 self.result_queue.put(("log", f"Writing XLSX report: {output_path}"))
-                scanner.write_xlsx(rows, output_path, target)
+                scanner.write_xlsx(rows, output_path, target, str(self.settings.get("active_check_profile") or ""))
             self.result_queue.put(("done", {"rows": rows, "output": output_path}))
         except scanner.ScanStopped:
             self.result_queue.put(("stopped", "Scan stopped. No new XLSX report was written."))
@@ -940,7 +1026,7 @@ class IconikLiteApp(tk.Tk):
             return
         path = self.output_path_var.get().strip() or default_output_path()
         try:
-            scanner.write_xlsx(self.rows, path, self.target_var.get().strip())
+            scanner.write_xlsx(self.rows, path, self.target_var.get().strip(), str(self.settings.get("active_check_profile") or ""))
         except Exception as exc:  # pylint: disable=broad-except
             messagebox.showerror("Could Not Save Report", str(exc), parent=self)
             return

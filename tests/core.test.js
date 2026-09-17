@@ -23,6 +23,10 @@ Format\tProRes
 Format profile\t422 HQ
 Frame rate\t23.976
 Height\t1080
+Pixel aspect ratio\t1:1
+Color primaries\tBT.709
+Matrix coefficients\tBT.709
+Transfer characteristics\tBT.709
 Scan type\tProgressive
 Width\t1920
 AUDIO
@@ -30,54 +34,51 @@ Bit depth\t24
 Bit rate\t2304000
 Channel s\t2
 Format\tPCM
+Language\teng
+Loudness\t-24.0 LKFS
 Sampling rate\t48000`;
+const officialPass = `${svodPass}\nTrue peak\t-2.5 dBTP`;
 
-const svod2997Pass = svodPass.replace(/Frame rate\t23\.976/g, "Frame rate\t29.970");
-const svodFail = svodPass.replace("Width\t1920", "Width\t1280").replace("Bit rate\t172557886", "Bit rate\t120000000");
-const svodBadFrame = svodPass.replace(/Frame rate\t23\.976/g, "Frame rate\t23.964");
-const svodMp4Warn = svodPass.replace("File extension\tmov", "File extension\tmp4");
-const svod720Warn = svodPass.replace("Width\t1920", "Width\t720").replace("Height\t1080", "Height\t480");
-const svodAudioWarn = svodPass
-  .replace("Bit rate\t2304000", "Bit rate\t1536000")
-  .replace("Sampling rate\t48000", "Sampling rate\t44100")
-  .replace("Bit depth\t24", "Bit depth\t16");
+const svodMp4Pass = officialPass.replace("File extension\tmov", "File extension\tmp4").replace("Codec ID\tapch", "Codec ID\tavc1").replace("Format\tProRes", "Format\tAVC");
+const svodFail = officialPass.replace("Width\t1920", "Width\t1280").replace("True peak\t-2.5 dBTP", "True peak\t-1.5 dBTP");
+const svodBadFrame = officialPass.replace(/Frame rate\t23\.976/g, "Frame rate\t23.964");
+const svodSdPass = officialPass.replace("Width\t1920", "Width\t720").replace("Height\t1080", "Height\t480").replace("Display aspect ratio\t1.778", "Display aspect ratio\t1.333");
+const svodLoudnessFail = officialPass.replace("Loudness\t-24.0 LKFS", "Loudness\t-20.5 LKFS");
+const svodHdrFail = officialPass.replace("Color primaries\tBT.709", "Color primaries\tBT.2020");
 const svodMissing = `GENERAL
 File extension\tmov
 VIDEO
 Format\tProRes`;
 
-const passResult = core.evaluateMetadata(svodPass, "pass.txt");
+const passResult = core.evaluateMetadata(officialPass, "pass.txt");
 assert.strictEqual(passResult.verdict, "PASS");
 assert.strictEqual(passResult.counts.fail, 0);
 assert.strictEqual(passResult.title, "PUR0003995");
 
-const pass2997Result = core.evaluateMetadata(svod2997Pass, "pass-2997.txt");
-assert.strictEqual(pass2997Result.verdict, "PASS");
-assert.ok(pass2997Result.checks.some((check) => check.id === "frame_rate" && check.status === "pass"));
-
 const failResult = core.evaluateMetadata(svodFail, "fail.txt");
 assert.strictEqual(failResult.verdict, "FAIL");
 assert.ok(failResult.checks.some((check) => check.id === "resolution" && check.status === "fail"));
-assert.ok(failResult.checks.some((check) => check.id === "video_bitrate" && check.status === "fail"));
+assert.ok(failResult.checks.some((check) => check.id === "true_peak" && check.status === "fail"));
 
 const badFrameResult = core.evaluateMetadata(svodBadFrame, "bad-frame.txt");
-assert.strictEqual(badFrameResult.verdict, "FAIL");
-assert.ok(badFrameResult.checks.some((check) => check.id === "frame_rate" && check.status === "fail" && check.value === "23.96 fps"));
+assert.strictEqual(badFrameResult.verdict, "PASS");
+assert.ok(!badFrameResult.checks.some((check) => check.id === "frame_rate"));
 
-const mp4Result = core.evaluateMetadata(svodMp4Warn, "mp4.txt");
-assert.strictEqual(mp4Result.verdict, "WARN");
-assert.ok(mp4Result.checks.some((check) => check.id === "file_type" && check.status === "warn"));
+const mp4Result = core.evaluateMetadata(svodMp4Pass, "mp4.txt");
+assert.strictEqual(mp4Result.verdict, "PASS");
+assert.ok(mp4Result.checks.some((check) => check.id === "file_type" && check.status === "pass"));
 
-const warn720Result = core.evaluateMetadata(svod720Warn, "720.txt");
-assert.strictEqual(warn720Result.verdict, "WARN");
-assert.ok(warn720Result.checks.some((check) => check.id === "resolution" && check.status === "warn"));
-assert.ok(warn720Result.reason.includes("Resolution (WARNING: 720x480)"));
+const sdResult = core.evaluateMetadata(svodSdPass, "720.txt");
+assert.strictEqual(sdResult.verdict, "PASS");
+assert.ok(sdResult.checks.some((check) => check.id === "resolution" && check.status === "pass"));
 
-const audioWarnResult = core.evaluateMetadata(svodAudioWarn, "audio-warn.txt");
-assert.strictEqual(audioWarnResult.verdict, "WARN");
-assert.ok(audioWarnResult.checks.some((check) => check.id === "audio_bitrate" && check.status === "warn"));
-assert.ok(audioWarnResult.checks.some((check) => check.id === "audio_sample_rate" && check.status === "warn"));
-assert.ok(audioWarnResult.checks.some((check) => check.id === "audio_bit_depth" && check.status === "warn"));
+const loudnessResult = core.evaluateMetadata(svodLoudnessFail, "loudness-fail.txt");
+assert.strictEqual(loudnessResult.verdict, "FAIL");
+assert.ok(loudnessResult.checks.some((check) => check.id === "loudness" && check.status === "fail"));
+
+const hdrResult = core.evaluateMetadata(svodHdrFail, "hdr-fail.txt");
+assert.strictEqual(hdrResult.verdict, "FAIL");
+assert.ok(hdrResult.checks.some((check) => check.id === "color_space" && check.status === "fail"));
 
 const missingResult = core.evaluateMetadata(svodMissing, "missing.txt");
 assert.strictEqual(missingResult.verdict, "MISSING INFO");
@@ -87,6 +88,6 @@ const csv = core.toCsv([passResult]);
 assert.ok(csv.startsWith("title,s3_prefix,verdict,reason,check,status,value,target,note"));
 assert.ok(csv.includes("PUR0003995"));
 assert.ok(csv.includes("File type"));
-assert.strictEqual(core.VERSION, "V1.9");
+assert.strictEqual(core.VERSION, "V1.10");
 
 console.log("core tests passed");

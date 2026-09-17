@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.9"
+VERSION = "V1.10"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -41,27 +41,154 @@ HEADER_FILL = "D9EAF1"
 
 
 CHECK_DEFS = [
-    ("file_type", "File type", ".mov; .mp4 warning"),
-    ("video_codec", "Video codec", "ProRes 422 HQ / apch"),
-    ("video_bitrate", "Video bit rate", ">= 145 Mb/s"),
-    ("resolution", "Resolution", "1920x1080"),
-    ("aspect_ratio", "Aspect ratio", "16:9"),
+    ("file_type", "File type", ".mov or high-bitrate .mp4"),
+    ("video_codec", "Video codec", "ProRes 422 HQ or native high-bitrate MP4 codec"),
+    ("video_bitrate", "Video bit rate", "Reported / profile-specific"),
+    ("resolution", "Resolution", "HD 1920x1080 or SD min 480p"),
+    ("aspect_ratio", "Aspect ratio", "HD 16:9 or SD 4:3"),
+    ("pixel_aspect_ratio", "Pixel aspect ratio", "1:1"),
     ("frame_rate", "Frame rate", "23.98 or 29.97 fps"),
     ("chroma", "Chroma sampling", "4:2:2"),
     ("scan_type", "Scan type", "Progressive"),
+    ("color_space", "Color space", "SDR Rec.709"),
     ("audio_codec", "Audio codec", "PCM"),
     ("audio_bitrate", "Audio bit rate", "channels x 1,152 kb/s"),
     ("audio_sample_rate", "Audio sample rate", "48 kHz"),
     ("audio_bit_depth", "Audio bit depth", "24-bit"),
-    ("stereo_only", "Stereo only", "1 stream, 2 channels"),
+    ("stereo_only", "Audio mapping / stereo", "Track 1 stereo interleaved L+R"),
+    ("audio_language", "Audio language", "One language per file"),
+    ("loudness", "Loudness", "-24 LKFS +/- 2"),
+    ("true_peak", "True peak", "<= -2 dBTP"),
     ("timecode_start", "Timecode start", "00:00:00:00 or 00;00;00;00"),
 ]
 
-DEFAULT_CHECK_PROFILE = {
+OFFICIAL_VOD_PROFILE_NAME = "VOD Technical Delivery Specification 2026_09_17"
+STRICT_PROFILE_NAME = "Original TE CHECK - Strict"
+LEGACY_LITE_PROFILE_NAME = "TE Tool Lite V1.9 SVOD"
+LEGACY_CUSTOM_PROFILE_NAME = "Previous Saved Custom Profile"
+
+OFFICIAL_VOD_CHECK_PROFILE = {
+    "file_type": {
+        "enabled": True,
+        "pass": "mov, mp4",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "video_codec": {
+        "enabled": True,
+        "pass": "apch, prores, h264, h.264, avc, avc1, hevc, h265, h.265",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "video_bitrate": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "resolution": {
+        "enabled": True,
+        "pass": "1920x1080, SD >= 480p",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "aspect_ratio": {
+        "enabled": True,
+        "pass": "HD 16:9 or SD 4:3",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "pixel_aspect_ratio": {
+        "enabled": True,
+        "pass": "1:1, 1.0",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "frame_rate": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "chroma": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "scan_type": {
+        "enabled": True,
+        "pass": "progressive",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "color_space": {
+        "enabled": True,
+        "pass": "rec.709, bt.709, bt709, 709, sdr",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "audio_codec": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "audio_bitrate": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "audio_sample_rate": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "audio_bit_depth": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "stereo_only": {
+        "enabled": True,
+        "pass": "1 stream, 2 channels",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "audio_language": {
+        "enabled": True,
+        "pass": "1 language",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "loudness": {
+        "enabled": True,
+        "pass": "-26 - -22 LKFS",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "true_peak": {
+        "enabled": True,
+        "pass": "<= -2 dBTP",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "timecode_start": {
+        "enabled": True,
+        "pass": "00:00:00:00, 00;00;00;00",
+        "warning": "",
+        "fail": "anything else",
+    },
+}
+
+STRICT_TE_CHECK_PROFILE = {
     "file_type": {
         "enabled": True,
         "pass": "mov",
-        "warning": "mp4",
+        "warning": "",
         "fail": "anything else",
     },
     "video_codec": {
@@ -79,12 +206,18 @@ DEFAULT_CHECK_PROFILE = {
     "resolution": {
         "enabled": True,
         "pass": "1920x1080",
-        "warning": "720x480",
+        "warning": "",
         "fail": "anything else",
     },
     "aspect_ratio": {
         "enabled": True,
         "pass": "16:9, 1.76-1.79",
+        "warning": "",
+        "fail": "anything else",
+    },
+    "pixel_aspect_ratio": {
+        "enabled": True,
+        "pass": "1:1, 1.0",
         "warning": "",
         "fail": "anything else",
     },
@@ -106,6 +239,12 @@ DEFAULT_CHECK_PROFILE = {
         "warning": "",
         "fail": "anything else",
     },
+    "color_space": {
+        "enabled": True,
+        "pass": "rec.709, bt.709, bt709, 709, sdr",
+        "warning": "",
+        "fail": "anything else",
+    },
     "audio_codec": {
         "enabled": True,
         "pass": "pcm",
@@ -115,26 +254,44 @@ DEFAULT_CHECK_PROFILE = {
     "audio_bitrate": {
         "enabled": True,
         "pass": "channels x 1152 kb/s",
-        "warning": "anything else",
-        "fail": "",
+        "warning": "",
+        "fail": "anything else",
     },
     "audio_sample_rate": {
         "enabled": True,
         "pass": "48000 Hz",
-        "warning": "anything else",
-        "fail": "",
+        "warning": "",
+        "fail": "anything else",
     },
     "audio_bit_depth": {
         "enabled": True,
         "pass": "24",
-        "warning": "anything else",
-        "fail": "",
+        "warning": "",
+        "fail": "anything else",
     },
     "stereo_only": {
         "enabled": True,
         "pass": "1 stream, 2 channels",
         "warning": "",
         "fail": "anything else",
+    },
+    "audio_language": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "loudness": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
+    },
+    "true_peak": {
+        "enabled": False,
+        "pass": "",
+        "warning": "",
+        "fail": "",
     },
     "timecode_start": {
         "enabled": True,
@@ -144,14 +301,38 @@ DEFAULT_CHECK_PROFILE = {
     },
 }
 
+LEGACY_LITE_CHECK_PROFILE = json.loads(json.dumps(STRICT_TE_CHECK_PROFILE))
+LEGACY_LITE_CHECK_PROFILE["file_type"]["warning"] = "mp4"
+LEGACY_LITE_CHECK_PROFILE["resolution"]["warning"] = "720x480"
+LEGACY_LITE_CHECK_PROFILE["audio_bitrate"]["warning"] = "anything else"
+LEGACY_LITE_CHECK_PROFILE["audio_bitrate"]["fail"] = ""
+LEGACY_LITE_CHECK_PROFILE["audio_sample_rate"]["warning"] = "anything else"
+LEGACY_LITE_CHECK_PROFILE["audio_sample_rate"]["fail"] = ""
+LEGACY_LITE_CHECK_PROFILE["audio_bit_depth"]["warning"] = "anything else"
+LEGACY_LITE_CHECK_PROFILE["audio_bit_depth"]["fail"] = ""
 
-def default_check_profile() -> Dict[str, Dict[str, Any]]:
-    """Return a fresh copy of the shipped SVOD check profile."""
-    return json.loads(json.dumps(DEFAULT_CHECK_PROFILE))
+DEFAULT_CHECK_PROFILE = OFFICIAL_VOD_CHECK_PROFILE
 
 
-def normalize_check_profile(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, Any]]:
-    normalized = default_check_profile()
+def builtin_check_profiles() -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """Return fresh copies of the shipped QC profiles."""
+    return {
+        OFFICIAL_VOD_PROFILE_NAME: json.loads(json.dumps(OFFICIAL_VOD_CHECK_PROFILE)),
+        STRICT_PROFILE_NAME: json.loads(json.dumps(STRICT_TE_CHECK_PROFILE)),
+        LEGACY_LITE_PROFILE_NAME: json.loads(json.dumps(LEGACY_LITE_CHECK_PROFILE)),
+    }
+
+
+def default_check_profile(profile_name: str = OFFICIAL_VOD_PROFILE_NAME) -> Dict[str, Dict[str, Any]]:
+    """Return a fresh copy of a shipped check profile."""
+    return json.loads(json.dumps(builtin_check_profiles().get(profile_name, OFFICIAL_VOD_CHECK_PROFILE)))
+
+
+def normalize_check_profile(
+    profile: Optional[Dict[str, Any]] = None,
+    base_profile: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    normalized = json.loads(json.dumps(base_profile or DEFAULT_CHECK_PROFILE))
     if not isinstance(profile, dict):
         return normalized
     valid_ids = {check_id for check_id, _, _ in CHECK_DEFS}
@@ -165,6 +346,30 @@ def normalize_check_profile(profile: Optional[Dict[str, Any]] = None) -> Dict[st
             if key in values:
                 rule[key] = str(values.get(key) or "").strip()
     return normalized
+
+
+def normalize_check_profile_library(
+    profiles: Optional[Dict[str, Any]] = None,
+    legacy_profile: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    normalized = builtin_check_profiles()
+    if isinstance(profiles, dict):
+        for name, profile in profiles.items():
+            clean_name = str(name or "").strip()
+            if not clean_name or not isinstance(profile, dict):
+                continue
+            base = normalized.get(clean_name, DEFAULT_CHECK_PROFILE)
+            normalized[clean_name] = normalize_check_profile(profile, base)
+    if isinstance(legacy_profile, dict):
+        normalized.setdefault(LEGACY_CUSTOM_PROFILE_NAME, normalize_check_profile(legacy_profile))
+    return normalized
+
+
+def active_check_profile_name(name: Any, profiles: Dict[str, Any]) -> str:
+    clean = str(name or "").strip()
+    if clean in profiles:
+        return clean
+    return OFFICIAL_VOD_PROFILE_NAME if OFFICIAL_VOD_PROFILE_NAME in profiles else next(iter(profiles))
 
 
 def rule_target(rule: Dict[str, Any]) -> str:
@@ -784,6 +989,18 @@ def add_flattened_aliases(flat: Dict[str, Any]) -> None:
         "video codec": ["video.codec", "video.format", "codec"],
         "video bitrate": ["video.bit rate", "bit rate"],
         "video.bitrate": ["video.bit rate", "bit rate", "video bitrate"],
+        "pixel aspect ratio": ["video.pixel aspect ratio", "sample aspect ratio"],
+        "video pixel aspect ratio": ["video.pixel aspect ratio", "sample aspect ratio"],
+        "sample aspect ratio": ["video.pixel aspect ratio", "pixel aspect ratio"],
+        "color primaries": ["video.color primaries", "color primaries"],
+        "video color primaries": ["video.color primaries", "color primaries"],
+        "colour primaries": ["video.color primaries", "color primaries"],
+        "matrix coefficients": ["video.matrix coefficients", "matrix coefficients"],
+        "video matrix coefficients": ["video.matrix coefficients", "matrix coefficients"],
+        "transfer characteristics": ["video.transfer characteristics", "transfer characteristics"],
+        "video transfer characteristics": ["video.transfer characteristics", "transfer characteristics"],
+        "color space": ["video.color space", "color space"],
+        "colour space": ["video.color space", "color space"],
         "audio codec": ["audio.format", "audio codec"],
         "audio channels": ["audio.channel s", "audio.channels", "channels"],
         "audio bit depth": ["audio.bit depth", "bit depth"],
@@ -791,6 +1008,13 @@ def add_flattened_aliases(flat: Dict[str, Any]) -> None:
         "audio.bitrate": ["audio.bit rate", "audio bitrate"],
         "audio sample rate": ["audio.sampling rate", "sampling rate"],
         "audio.sample rate": ["audio.sampling rate", "sampling rate", "audio sample rate"],
+        "audio language": ["audio.language", "language"],
+        "language": ["audio.language"],
+        "loudness": ["audio.loudness", "integrated loudness"],
+        "integrated loudness": ["audio.loudness", "loudness"],
+        "audio integrated loudness": ["audio.loudness", "integrated loudness"],
+        "true peak": ["audio.true peak", "true peak"],
+        "audio true peak": ["audio.true peak", "true peak"],
     }
     for source_key, destinations in alias_groups.items():
         value = flat.get(source_key)
@@ -829,10 +1053,21 @@ def matches_contains_text(value: str, criteria: Any) -> bool:
     return any(lower(part) in text for part in criteria_parts(criteria))
 
 
+def contains_hdr_color_signal(value: str) -> bool:
+    text = lower(value)
+    return any(signal in text for signal in ("bt.2020", "bt2020", "2020", "pq", "smpte st 2084", "hlg", "hdr"))
+
+
 def matches_resolution(width: Optional[int], height: Optional[int], criteria: Any) -> bool:
     if width is None or height is None:
         return False
     for part in criteria_parts(criteria):
+        text = lower(part)
+        if "sd" in text and "480p" in text:
+            if min(width, height) >= 480 and max(width, height) <= 1024:
+                return True
+        if text in {">= 480p", "min 480p"} and min(width, height) >= 480:
+            return True
         parsed = parse_resolution(part)
         if parsed and parsed == (width, height):
             return True
@@ -865,7 +1100,7 @@ def matches_numeric(value: Optional[int], criteria: Any) -> bool:
             return True
         if text.startswith("<") and value < threshold:
             return True
-        range_match = re.match(r"^\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*$", text)
+        range_match = re.match(r"^\s*(-?\d+(?:\.\d+)?)\s*(?:-|to)\s*(-?\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
         if range_match:
             low = parse_number(range_match.group(1))
             high = parse_number(range_match.group(2))
@@ -874,6 +1109,11 @@ def matches_numeric(value: Optional[int], criteria: Any) -> bool:
         elif value == threshold:
             return True
     return False
+
+
+def format_measurement(value: float, unit: str) -> str:
+    text = f"{value:.2f}".rstrip("0").rstrip(".")
+    return f"{text} {unit}"
 
 
 def matches_ratio(value: Optional[float], raw: str, criteria: Any) -> bool:
@@ -919,6 +1159,48 @@ def matches_stereo(streams: Optional[int], channels: Optional[int], criteria: An
     expected_channels = numbers[-1] if numbers else 2
     stream_ok = expected_streams is None or streams in (None, expected_streams)
     return stream_ok and channels == expected_channels
+
+
+def is_sd_resolution(width: Optional[int], height: Optional[int]) -> bool:
+    return bool(width and height and min(width, height) >= 480 and max(width, height) <= 1024)
+
+
+def is_hd_resolution(width: Optional[int], height: Optional[int]) -> bool:
+    return bool(width == 1920 and height == 1080)
+
+
+def matches_vod_aspect(
+    ratio: Optional[float],
+    raw: str,
+    width: Optional[int],
+    height: Optional[int],
+    criteria: Any,
+) -> bool:
+    text = lower(criteria)
+    if "hd" not in text or "sd" not in text:
+        return False
+    if is_hd_resolution(width, height):
+        return matches_ratio(ratio, raw, "16:9, 1.76-1.79")
+    if is_sd_resolution(width, height):
+        return matches_ratio(ratio, raw, "4:3, 1.32-1.34")
+    return matches_ratio(ratio, raw, "16:9, 1.76-1.79, 4:3, 1.32-1.34")
+
+
+def language_values(value: str) -> List[str]:
+    ignored = {"", "und", "undefined", "unknown", "n/a", "none", "not reported"}
+    values = []
+    for part in re.split(r"[,|;/]+", str(value or "")):
+        clean = part.strip().lower()
+        if clean and clean not in ignored:
+            values.append(clean)
+    return sorted(set(values))
+
+
+def matches_language_count(value: str, criteria: Any) -> bool:
+    languages = language_values(value)
+    expected_numbers = [int(v) for v in re.findall(r"\d+", str(criteria or ""))]
+    expected = expected_numbers[0] if expected_numbers else 1
+    return len(languages) == expected
 
 
 def warning_or_fail(
@@ -995,8 +1277,8 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any], ru
         if matches_resolution(width, height, rule.get("pass")):
             return result(check_id, label, target, "pass", value)
         if matches_resolution(width, height, rule.get("warning")) or criteria_is_anything_else(rule.get("warning")):
-            return result(check_id, label, target, "warning", value, "720x480 is accepted as a warning for SVOD review.")
-        return result(check_id, label, target, "fail", value, "Expected exactly 1920x1080.")
+            return result(check_id, label, target, "warning", value, "Resolution is accepted as a warning for this profile.")
+        return result(check_id, label, target, "fail", value, "Expected HD 1920x1080 or SD at least 480p.")
     if check_id == "aspect_ratio":
         raw = first(m, ["video.display aspect ratio string", "video.display aspect ratio", "display_aspect_ratio", "display aspect ratio"])
         ratio = parse_ratio(raw)
@@ -1010,8 +1292,18 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any], ru
         if not raw and calculated is None:
             return missing_result(check_id, label, target, "Aspect ratio or resolution was not available.")
         display = raw or (f"{calculated:.3f}" if calculated else "missing")
-        pass_match = matches_ratio(ratio, raw, rule.get("pass")) or matches_ratio(calculated, raw, rule.get("pass"))
-        warning_match = matches_ratio(ratio, raw, rule.get("warning")) or matches_ratio(calculated, raw, rule.get("warning"))
+        pass_match = (
+            matches_vod_aspect(ratio, raw, width, height, rule.get("pass"))
+            or matches_vod_aspect(calculated, raw, width, height, rule.get("pass"))
+            or matches_ratio(ratio, raw, rule.get("pass"))
+            or matches_ratio(calculated, raw, rule.get("pass"))
+        )
+        warning_match = (
+            matches_vod_aspect(ratio, raw, width, height, rule.get("warning"))
+            or matches_vod_aspect(calculated, raw, width, height, rule.get("warning"))
+            or matches_ratio(ratio, raw, rule.get("warning"))
+            or matches_ratio(calculated, raw, rule.get("warning"))
+        )
         if pass_match:
             return result(check_id, label, target, "pass", display)
         return warning_or_fail(
@@ -1021,7 +1313,24 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any], ru
             display,
             rule,
             warning_match,
-            "Expected 16:9.",
+            "Expected HD 16:9 or SD 4:3.",
+        )
+    if check_id == "pixel_aspect_ratio":
+        value = first(m, ["video.pixel aspect ratio", "pixel aspect ratio", "sample aspect ratio", "sar"])
+        ratio = parse_ratio(value)
+        if not value and ratio is None:
+            return missing_result(check_id, label, target, "Pixel aspect ratio was not available.")
+        display = value or (f"{ratio:.3f}" if ratio else "missing")
+        if matches_ratio(ratio, value, rule.get("pass")):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_ratio(ratio, value, rule.get("warning")),
+            "Expected square pixels / 1:1 pixel aspect ratio.",
         )
     if check_id == "frame_rate":
         fps = parse_frame_rate(first(m, ["video.r frame rate", "r_frame_rate", "video.frame rate", "frame_rate", "frame rate", "video framerate"]))
@@ -1068,6 +1377,28 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any], ru
             rule,
             matches_contains_text(value, rule.get("warning")),
             "Expected progressive scan.",
+        )
+    if check_id == "color_space":
+        values = [
+            first(m, ["video.color space", "color space", "colour space"]),
+            first(m, ["video.color primaries", "color primaries", "colour primaries"]),
+            first(m, ["video.matrix coefficients", "matrix coefficients"]),
+            first(m, ["video.transfer characteristics", "transfer characteristics"]),
+        ]
+        present = [value for value in values if value]
+        display = " / ".join(dict.fromkeys(present))
+        if not display:
+            return missing_result(check_id, label, target, "Color space / Rec.709 metadata was not available.")
+        if matches_contains_text(display, rule.get("pass")) and not contains_hdr_color_signal(display):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_contains_text(display, rule.get("warning")),
+            "Expected SDR Rec.709 color metadata.",
         )
     if check_id == "audio_codec":
         value = first(m, ["audio.codec", "audio.format", "audio codec", "audio codecs", "audio codec name", "audio.codec_name"])
@@ -1149,6 +1480,55 @@ def evaluate_check(check_id: str, label: str, target: str, m: Dict[str, Any], ru
             rule,
             matches_stereo(streams, channels, rule.get("warning")),
             "Expected one stereo audio stream.",
+        )
+    if check_id == "audio_language":
+        value = first(m, ["audio.language", "language", "audio language", "audio.language string"])
+        if not value:
+            return missing_result(check_id, label, target, "Audio language metadata was not available.")
+        languages = language_values(value)
+        display = ", ".join(languages) if languages else value
+        if matches_language_count(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_language_count(value, rule.get("warning")),
+            "Expected one language per video file.",
+        )
+    if check_id == "loudness":
+        value = parse_float_number(first(m, ["audio.loudness", "loudness", "integrated loudness", "audio.integrated loudness"]))
+        if value is None:
+            return missing_result(check_id, label, target, "Integrated loudness metadata was not available.")
+        display = format_measurement(value, "LKFS")
+        if matches_numeric(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_numeric(value, rule.get("warning")),
+            "Expected -24 LKFS with +/- 2 tolerance.",
+        )
+    if check_id == "true_peak":
+        value = parse_float_number(first(m, ["audio.true peak", "true peak", "true_peak", "audio.true_peak"]))
+        if value is None:
+            return missing_result(check_id, label, target, "True peak metadata was not available.")
+        display = format_measurement(value, "dBTP")
+        if matches_numeric(value, rule.get("pass")):
+            return result(check_id, label, target, "pass", display)
+        return warning_or_fail(
+            check_id,
+            label,
+            target,
+            display,
+            rule,
+            matches_numeric(value, rule.get("warning")),
+            "Expected true peak at or below -2 dBTP.",
         )
     if check_id == "timecode_start":
         value = first(m, ["general.tim", "tim", "timecode", "start_timecode"])
@@ -1241,6 +1621,24 @@ def parse_number(value: Any) -> Optional[int]:
     return int(round(number))
 
 
+def parse_float_number(value: Any) -> Optional[float]:
+    if value in (None, ""):
+        return None
+    text = str(value).replace(",", "").strip()
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if not match:
+        return None
+    number = float(match.group(0))
+    ltext = text.lower()
+    if "mb/s" in ltext:
+        number *= 1_000_000
+    elif "kb/s" in ltext:
+        number *= 1_000
+    elif "khz" in ltext:
+        number *= 1_000
+    return number
+
+
 def parse_frame_rate(value: str) -> Optional[float]:
     text = str(value or "").strip()
     fraction = re.search(r"(\d+)\s*/\s*(\d+)", text)
@@ -1304,7 +1702,7 @@ def int_or_zero(value: Any) -> int:
         return 0
 
 
-def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str) -> None:
+def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str, profile_name: str = "") -> None:
     headers = [
         "Result",
         "Reason",
@@ -1339,6 +1737,7 @@ def write_xlsx(rows: Sequence[ScanRow], output_path: str, target: str) -> None:
     summary = [
         ["TE Tool - Iconik Lite Version", VERSION],
         ["Target", target],
+        ["Check Profile", profile_name or OFFICIAL_VOD_PROFILE_NAME],
         ["Generated", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
         ["Total Videos", str(len(rows))],
         ["Pass", str(sum(1 for r in rows if r.verdict == "PASS"))],

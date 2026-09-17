@@ -6,6 +6,24 @@ import zipfile
 import te_iconik_scanner as scanner
 
 
+def add_official_vod_metadata(fobj):
+    technical = fobj.setdefault("technical_metadata", {})
+    general = technical.setdefault("general", {})
+    video = technical.setdefault("video", {})
+    audio = technical.setdefault("audio", {})
+    general.setdefault("count of audio streams", "1")
+    general.setdefault("tim", "00:00:00:00")
+    video.setdefault("pixel aspect ratio", "1:1")
+    video.setdefault("color primaries", "BT.709")
+    video.setdefault("matrix coefficients", "BT.709")
+    video.setdefault("transfer characteristics", "BT.709")
+    audio.setdefault("channel s", "2")
+    audio.setdefault("language", "eng")
+    audio.setdefault("loudness", "-24.0 LKFS")
+    audio.setdefault("true peak", "-2.5 dBTP")
+    return fobj
+
+
 class ScannerTests(unittest.TestCase):
     def test_parse_s3_folder_and_file_targets(self):
         self.assertEqual(
@@ -21,9 +39,9 @@ class ScannerTests(unittest.TestCase):
             ("s3", "s3://gacm-deliver-vod/movie/title.mov"),
         )
 
-    def test_evaluate_record_pass_fail(self):
+    def test_official_vod_profile_passes_current_spec_metadata(self):
         asset = {"id": "asset-1", "title": "Test"}
-        fobj = {
+        fobj = add_official_vod_metadata({
             "filename": "title.mov",
             "technical_metadata": {
                 "general": {"count of audio streams": "1", "tim": "00:00:00:00"},
@@ -47,17 +65,58 @@ class ScannerTests(unittest.TestCase):
                     "bit depth": "24",
                 },
             },
-        }
+        })
         checks = scanner.evaluate_record(asset, fobj)
         self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
-
-        fobj["technical_metadata"]["video"]["frame rate"] = "29.970"
-        checks = scanner.evaluate_record(asset, fobj)
-        self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
+        self.assertTrue(any(check.check_id == "frame_rate" and check.status == "ignored" for check in checks))
+        self.assertTrue(any(check.check_id == "chroma" and check.status == "ignored" for check in checks))
 
         fobj["technical_metadata"]["video"]["frame rate"] = "23.964"
         checks = scanner.evaluate_record(asset, fobj)
+        self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
+
+        fobj["technical_metadata"]["video"]["color primaries"] = "BT.2020"
+        checks = scanner.evaluate_record(asset, fobj)
+        self.assertTrue(any(check.check_id == "color_space" and check.status == "fail" for check in checks))
         self.assertEqual(scanner.verdict_from_checks(checks), "FAIL")
+
+    def test_strict_te_profile_keeps_original_frame_and_bitrate_gate(self):
+        asset = {"id": "asset-1", "title": "Test"}
+        fobj = add_official_vod_metadata({
+            "filename": "title.mov",
+            "technical_metadata": {
+                "general": {"count of audio streams": "1", "tim": "00:00:00:00"},
+                "video": {
+                    "codec id": "apch",
+                    "format": "ProRes",
+                    "format profile": "422 HQ",
+                    "bit rate": "172557886",
+                    "width": "1920",
+                    "height": "1080",
+                    "display aspect ratio": "1.778",
+                    "frame rate": "29.970",
+                    "chroma subsampling": "4:2:2",
+                    "scan type": "Progressive",
+                },
+                "audio": {
+                    "format": "PCM",
+                    "bit rate": "2304000",
+                    "channel s": "2",
+                    "sampling rate": "48000",
+                    "bit depth": "24",
+                },
+            },
+        })
+        strict = scanner.default_check_profile(scanner.STRICT_PROFILE_NAME)
+        checks = scanner.evaluate_record(asset, fobj, strict)
+        self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
+
+        fobj["technical_metadata"]["video"]["frame rate"] = "23.964"
+        fobj["technical_metadata"]["video"]["bit rate"] = "120000000"
+        checks = scanner.evaluate_record(asset, fobj, strict)
+        self.assertEqual(scanner.verdict_from_checks(checks), "FAIL")
+        self.assertTrue(any(check.check_id == "frame_rate" and check.status == "fail" for check in checks))
+        self.assertTrue(any(check.check_id == "video_bitrate" and check.status == "fail" for check in checks))
 
     def test_evaluate_flattened_iconik_report_fields(self):
         asset = {"id": "asset-1", "title": "crossroad_springs_s01_e01_hd_PUR0001145_eng.mov"}
@@ -99,6 +158,10 @@ class ScannerTests(unittest.TestCase):
                             "resolution": "1920x1080",
                             "chroma_subsampling": "4:2:2 | yuv422p10le",
                             "scan_type": "progressive",
+                            "pixel_aspect_ratio": "1:1",
+                            "color_primaries": "BT.709",
+                            "matrix_coefficients": "BT.709",
+                            "transfer_characteristics": "BT.709",
                         },
                     },
                     {
@@ -109,6 +172,9 @@ class ScannerTests(unittest.TestCase):
                             "bit_depth": "24",
                             "bitrate": "2304000",
                             "sample_rate": "48000",
+                            "language": "eng",
+                            "loudness": "-24.0 LKFS",
+                            "true_peak": "-2.5 dBTP",
                         },
                     },
                 ],
@@ -117,9 +183,9 @@ class ScannerTests(unittest.TestCase):
         checks = scanner.evaluate_record(asset, fobj)
         self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
 
-    def test_mp4_is_warning(self):
+    def test_mp4_is_allowed_by_official_profile_and_warning_in_legacy_lite_profile(self):
         asset = {"id": "asset-1", "title": "Test"}
-        fobj = {
+        fobj = add_official_vod_metadata({
             "original_name": "title.mp4",
             "technical_metadata": {
                 "general": {"count of audio streams": "1", "tim": "00:00:00:00"},
@@ -141,19 +207,24 @@ class ScannerTests(unittest.TestCase):
                     "bit depth": "24",
                 },
             },
-        }
+        })
         checks = scanner.evaluate_record(asset, fobj)
+        self.assertTrue(any(check.check_id == "file_type" and check.status == "pass" for check in checks))
+        self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
+
+        legacy = scanner.default_check_profile(scanner.LEGACY_LITE_PROFILE_NAME)
+        checks = scanner.evaluate_record(asset, fobj, legacy)
         self.assertTrue(any(check.check_id == "file_type" and check.status == "warning" for check in checks))
         self.assertEqual(scanner.verdict_from_checks(checks), "WARNING")
 
         fobj["technical_metadata"]["video"]["frame rate"] = "23.976"
         fobj["technical_metadata"]["video"]["width"] = "1280"
-        checks = scanner.evaluate_record(asset, fobj)
+        checks = scanner.evaluate_record(asset, fobj, legacy)
         self.assertEqual(scanner.verdict_from_checks(checks), "FAIL")
 
-    def test_720x480_and_audio_specs_are_warnings(self):
+    def test_sd_480p_passes_official_profile_with_4x3_aspect(self):
         asset = {"id": "asset-1", "title": "Test"}
-        fobj = {
+        fobj = add_official_vod_metadata({
             "original_name": "title.mov",
             "technical_metadata": {
                 "general": {"count of audio streams": "1", "tim": "00:00:00:00"},
@@ -162,7 +233,7 @@ class ScannerTests(unittest.TestCase):
                     "bit rate": "172557886",
                     "width": "720",
                     "height": "480",
-                    "display aspect ratio": "1.778",
+                    "display aspect ratio": "1.333",
                     "frame rate": "29.970",
                     "chroma subsampling": "4:2:2",
                     "scan type": "Progressive",
@@ -175,18 +246,16 @@ class ScannerTests(unittest.TestCase):
                     "bit depth": "16",
                 },
             },
-        }
+        })
         checks = scanner.evaluate_record(asset, fobj)
-        self.assertEqual(scanner.verdict_from_checks(checks), "WARNING")
-        self.assertTrue(any(check.check_id == "resolution" and check.status == "warning" and check.value == "720x480" for check in checks))
-        self.assertTrue(any(check.check_id == "audio_bitrate" and check.status == "warning" for check in checks))
-        self.assertTrue(any(check.check_id == "audio_sample_rate" and check.status == "warning" for check in checks))
-        self.assertTrue(any(check.check_id == "audio_bit_depth" and check.status == "warning" for check in checks))
+        self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
+        self.assertTrue(any(check.check_id == "resolution" and check.status == "pass" and check.value == "720x480" for check in checks))
+        self.assertTrue(any(check.check_id == "audio_bitrate" and check.status == "ignored" for check in checks))
         self.assertFalse(any(check.status == "fail" for check in checks))
 
     def test_custom_check_profile_can_ignore_and_adjust_rules(self):
         asset = {"id": "asset-1", "title": "Test"}
-        fobj = {
+        fobj = add_official_vod_metadata({
             "original_name": "title.mov",
             "technical_metadata": {
                 "general": {"count of audio streams": "1", "tim": "00:00:00:00"},
@@ -208,8 +277,8 @@ class ScannerTests(unittest.TestCase):
                     "bit depth": "24",
                 },
             },
-        }
-        profile = scanner.default_check_profile()
+        })
+        profile = scanner.default_check_profile(scanner.STRICT_PROFILE_NAME)
         profile["video_bitrate"]["enabled"] = False
         profile["frame_rate"]["warning"] = "23.96"
         checks = scanner.evaluate_record(asset, fobj, profile)
@@ -217,7 +286,7 @@ class ScannerTests(unittest.TestCase):
         self.assertTrue(any(check.check_id == "frame_rate" and check.status == "warning" for check in checks))
         self.assertEqual(scanner.verdict_from_checks(checks), "WARNING")
 
-        profile = scanner.default_check_profile()
+        profile = scanner.default_check_profile(scanner.STRICT_PROFILE_NAME)
         profile["video_bitrate"]["pass"] = ">= 100 Mb/s"
         checks = scanner.evaluate_record(asset, fobj, profile)
         self.assertTrue(any(check.check_id == "video_bitrate" and check.status == "pass" for check in checks))
@@ -251,7 +320,7 @@ class ScannerTests(unittest.TestCase):
                 self.assertIn("Video codec (FAIL: H.264)", sheet)
                 self.assertIn("Video bit rate (MISSING INFO: missing)", sheet)
                 self.assertIn("Upload Date", sheet)
-                self.assertIn('<autoFilter ref="A1:V1"/>', sheet)
+                self.assertIn('<autoFilter ref="A1:AA1"/>', sheet)
                 self.assertIn('<c r="B2" t="inlineStr" s="4">', sheet)
                 self.assertIn('<c r="I2" t="inlineStr" s="3">', sheet)
                 self.assertIn('<c r="J2" t="inlineStr" s="4">', sheet)
@@ -268,7 +337,8 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(row.verdict, "MISSING INFO")
         self.assertEqual(row.s3_uri, "s3://gacm-deliver-vod/folder/title.mov")
         self.assertEqual(row.upload_date, "2026-09-15T10:00:00+00:00")
-        self.assertTrue(all(check.status == "missing" for check in row.checks))
+        self.assertTrue(all(check.status in {"missing", "ignored"} for check in row.checks))
+        self.assertTrue(any(check.status == "missing" for check in row.checks))
 
 
 if __name__ == "__main__":
