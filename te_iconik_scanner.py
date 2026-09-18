@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.11"
+VERSION = "V1.12"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -66,6 +66,8 @@ OFFICIAL_VOD_PROFILE_NAME = "VOD Technical Delivery Specification 2026_09_17"
 STRICT_PROFILE_NAME = "Original TE CHECK - Strict"
 LEGACY_LITE_PROFILE_NAME = "TE Tool Lite V1.9 SVOD"
 LEGACY_CUSTOM_PROFILE_NAME = "Previous Saved Custom Profile"
+CHECK_PROFILE_DEFAULTS_VERSION = "V1.12"
+OFFICIAL_VOD_DISABLED_BY_DEFAULT_CHECKS = {"loudness", "true_peak", "timecode_start"}
 
 OFFICIAL_VOD_CHECK_PROFILE = {
     "file_type": {
@@ -165,19 +167,19 @@ OFFICIAL_VOD_CHECK_PROFILE = {
         "fail": "anything else",
     },
     "loudness": {
-        "enabled": True,
+        "enabled": False,
         "pass": "-26 - -22 LKFS",
         "warning": "",
         "fail": "anything else",
     },
     "true_peak": {
-        "enabled": True,
+        "enabled": False,
         "pass": "<= -2 dBTP",
         "warning": "",
         "fail": "anything else",
     },
     "timecode_start": {
-        "enabled": True,
+        "enabled": False,
         "pass": "00:00:00:00, 00;00;00;00",
         "warning": "",
         "fail": "anything else",
@@ -351,8 +353,10 @@ def normalize_check_profile(
 def normalize_check_profile_library(
     profiles: Optional[Dict[str, Any]] = None,
     legacy_profile: Optional[Dict[str, Any]] = None,
+    defaults_version: Optional[str] = None,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
     normalized = builtin_check_profiles()
+    migrate_saved_official_profile = str(defaults_version or "").strip() != CHECK_PROFILE_DEFAULTS_VERSION
     if isinstance(profiles, dict):
         for name, profile in profiles.items():
             clean_name = str(name or "").strip()
@@ -360,6 +364,9 @@ def normalize_check_profile_library(
                 continue
             base = normalized.get(clean_name, DEFAULT_CHECK_PROFILE)
             normalized[clean_name] = normalize_check_profile(profile, base)
+            if clean_name == OFFICIAL_VOD_PROFILE_NAME and migrate_saved_official_profile:
+                for check_id in OFFICIAL_VOD_DISABLED_BY_DEFAULT_CHECKS:
+                    normalized[clean_name][check_id]["enabled"] = False
     if isinstance(legacy_profile, dict):
         normalized.setdefault(LEGACY_CUSTOM_PROFILE_NAME, normalize_check_profile(legacy_profile))
     return normalized

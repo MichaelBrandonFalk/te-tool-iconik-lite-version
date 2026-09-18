@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.12
+
+- Updated **VOD Technical Delivery Specification 2026_09_17** so Loudness, True Peak, and Timecode Start are unchecked by default and no longer create MISSING INFO results when Iconik omits those fields.
+- Added a saved-profile migration so older saved copies of the official VOD profile also receive the new unchecked defaults.
+- Kept Timecode Start available in Settings so users can check it back on for the official profile or any custom profile.
+- Updated the browser metadata checker and public page copy to match the V1.12 default profile behavior.
+
 ## V1.11
 
 - Fixed a macOS Tk/Tcl crash by preventing background worker threads from touching Tk variables or scheduling Tk callbacks directly.

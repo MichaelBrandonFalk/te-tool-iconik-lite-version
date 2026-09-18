@@ -70,6 +70,9 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
         self.assertTrue(any(check.check_id == "frame_rate" and check.status == "ignored" for check in checks))
         self.assertTrue(any(check.check_id == "chroma" and check.status == "ignored" for check in checks))
+        self.assertTrue(any(check.check_id == "loudness" and check.status == "ignored" for check in checks))
+        self.assertTrue(any(check.check_id == "true_peak" and check.status == "ignored" for check in checks))
+        self.assertTrue(any(check.check_id == "timecode_start" and check.status == "ignored" for check in checks))
 
         fobj["technical_metadata"]["video"]["frame rate"] = "23.964"
         checks = scanner.evaluate_record(asset, fobj)
@@ -137,8 +140,32 @@ class ScannerTests(unittest.TestCase):
         }
         checks = scanner.evaluate_record(asset, fobj)
         self.assertFalse(any(check.status == "fail" for check in checks))
-        self.assertTrue(any(check.check_id == "timecode_start" and check.status == "missing" for check in checks))
+        self.assertTrue(any(check.check_id == "loudness" and check.status == "ignored" for check in checks))
+        self.assertTrue(any(check.check_id == "true_peak" and check.status == "ignored" for check in checks))
+        self.assertTrue(any(check.check_id == "timecode_start" and check.status == "ignored" for check in checks))
         self.assertEqual(scanner.verdict_from_checks(checks), "MISSING INFO")
+
+    def test_saved_official_vod_profile_migrates_loudness_peak_timecode_to_unchecked(self):
+        old_saved_profile = scanner.default_check_profile(scanner.OFFICIAL_VOD_PROFILE_NAME)
+        old_saved_profile["loudness"]["enabled"] = True
+        old_saved_profile["true_peak"]["enabled"] = True
+        old_saved_profile["timecode_start"]["enabled"] = True
+        profiles = scanner.normalize_check_profile_library(
+            {scanner.OFFICIAL_VOD_PROFILE_NAME: old_saved_profile},
+            defaults_version="V1.11",
+        )
+        official = profiles[scanner.OFFICIAL_VOD_PROFILE_NAME]
+        self.assertFalse(official["loudness"]["enabled"])
+        self.assertFalse(official["true_peak"]["enabled"])
+        self.assertFalse(official["timecode_start"]["enabled"])
+
+        reenabled_profile = scanner.default_check_profile(scanner.OFFICIAL_VOD_PROFILE_NAME)
+        reenabled_profile["timecode_start"]["enabled"] = True
+        profiles = scanner.normalize_check_profile_library(
+            {scanner.OFFICIAL_VOD_PROFILE_NAME: reenabled_profile},
+            defaults_version=scanner.CHECK_PROFILE_DEFAULTS_VERSION,
+        )
+        self.assertTrue(profiles[scanner.OFFICIAL_VOD_PROFILE_NAME]["timecode_start"]["enabled"])
 
     def test_evaluate_iconik_format_component_metadata(self):
         asset = {"id": "asset-1", "title": "crossroad_springs_s01_e01_hd_PUR0001145_eng.mov"}

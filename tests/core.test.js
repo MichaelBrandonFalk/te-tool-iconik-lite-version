@@ -58,7 +58,8 @@ assert.strictEqual(passResult.title, "PUR0003995");
 const failResult = core.evaluateMetadata(svodFail, "fail.txt");
 assert.strictEqual(failResult.verdict, "FAIL");
 assert.ok(failResult.checks.some((check) => check.id === "resolution" && check.status === "fail"));
-assert.ok(failResult.checks.some((check) => check.id === "true_peak" && check.status === "fail"));
+assert.ok(!failResult.checks.some((check) => check.id === "true_peak"));
+assert.ok(failResult.infoChecks.some((check) => check.id === "true_peak" && check.status === "info"));
 
 const badFrameResult = core.evaluateMetadata(svodBadFrame, "bad-frame.txt");
 assert.strictEqual(badFrameResult.verdict, "PASS");
@@ -73,8 +74,9 @@ assert.strictEqual(sdResult.verdict, "PASS");
 assert.ok(sdResult.checks.some((check) => check.id === "resolution" && check.status === "pass"));
 
 const loudnessResult = core.evaluateMetadata(svodLoudnessFail, "loudness-fail.txt");
-assert.strictEqual(loudnessResult.verdict, "FAIL");
-assert.ok(loudnessResult.checks.some((check) => check.id === "loudness" && check.status === "fail"));
+assert.strictEqual(loudnessResult.verdict, "PASS");
+assert.ok(!loudnessResult.checks.some((check) => check.id === "loudness"));
+assert.ok(loudnessResult.infoChecks.some((check) => check.id === "loudness" && check.status === "info"));
 
 const hdrResult = core.evaluateMetadata(svodHdrFail, "hdr-fail.txt");
 assert.strictEqual(hdrResult.verdict, "FAIL");
@@ -88,6 +90,6 @@ const csv = core.toCsv([passResult]);
 assert.ok(csv.startsWith("title,s3_prefix,verdict,reason,check,status,value,target,note"));
 assert.ok(csv.includes("PUR0003995"));
 assert.ok(csv.includes("File type"));
-assert.strictEqual(core.VERSION, "V1.11");
+assert.strictEqual(core.VERSION, "V1.12");
 
 console.log("core tests passed");

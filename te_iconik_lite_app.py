@@ -21,7 +21,7 @@ import te_iconik_scanner as scanner
 
 
 APP_NAME = "TE Tool - Iconik Lite Version"
-VERSION = "V1.11"
+VERSION = "V1.12"
 CONFIG_DIR = Path.home() / "Library" / "Application Support" / "TE Tool Iconik Lite"
 CONFIG_PATH = CONFIG_DIR / "settings.json"
 KEYCHAIN_SERVICE = "TE Tool Iconik Lite"
@@ -57,7 +57,11 @@ class ConfigStore:
     @staticmethod
     def save(data: Dict[str, Any]) -> None:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        profiles = scanner.normalize_check_profile_library(data.get("check_profiles"), data.get("check_profile"))
+        profiles = scanner.normalize_check_profile_library(
+            data.get("check_profiles"),
+            data.get("check_profile"),
+            data.get("check_profile_defaults_version"),
+        )
         active_profile = scanner.active_check_profile_name(data.get("active_check_profile"), profiles)
         safe = {
             "host": str(data.get("host") or DEFAULT_HOST).strip().rstrip("/") or DEFAULT_HOST,
@@ -66,6 +70,7 @@ class ConfigStore:
             "save_xlsx_automatically": bool(data.get("save_xlsx_automatically", True)),
             "active_check_profile": active_profile,
             "check_profiles": profiles,
+            "check_profile_defaults_version": scanner.CHECK_PROFILE_DEFAULTS_VERSION,
         }
         tmp = CONFIG_PATH.with_suffix(".json.tmp")
         with tmp.open("w", encoding="utf-8") as handle:
@@ -353,7 +358,11 @@ class SettingsDialog(tk.Toplevel):
         self.auto_save_var = tk.BooleanVar(value=bool(cfg.get("save_xlsx_automatically", True)))
         self.test_status_var = tk.StringVar(value="")
         self.test_queue: "queue.Queue[str]" = queue.Queue()
-        self.check_profiles = scanner.normalize_check_profile_library(cfg.get("check_profiles"), cfg.get("check_profile"))
+        self.check_profiles = scanner.normalize_check_profile_library(
+            cfg.get("check_profiles"),
+            cfg.get("check_profile"),
+            cfg.get("check_profile_defaults_version"),
+        )
         self.active_check_profile_name = scanner.active_check_profile_name(cfg.get("active_check_profile"), self.check_profiles)
         self.profile_name_var = tk.StringVar(value=self.active_check_profile_name)
         self.check_profile = scanner.normalize_check_profile(self.check_profiles[self.active_check_profile_name])
@@ -653,7 +662,11 @@ class IconikLiteApp(tk.Tk):
 
     def load_settings(self) -> None:
         cfg = ConfigStore.load()
-        profiles = scanner.normalize_check_profile_library(cfg.get("check_profiles"), cfg.get("check_profile"))
+        profiles = scanner.normalize_check_profile_library(
+            cfg.get("check_profiles"),
+            cfg.get("check_profile"),
+            cfg.get("check_profile_defaults_version"),
+        )
         active_profile = scanner.active_check_profile_name(cfg.get("active_check_profile"), profiles)
         self.settings = {
             "host": str(cfg.get("host") or DEFAULT_HOST).strip().rstrip("/") or DEFAULT_HOST,

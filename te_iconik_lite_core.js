@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "V1.11";
+  const VERSION = "V1.12";
 
   const CHECKS = [
     {
@@ -136,45 +136,40 @@
         return fail(languages.join(", ") || value, "Expected one language per video file.");
       },
     },
+  ];
+
+  const INFO_CHECKS = [
     {
       id: "loudness",
       label: "Loudness",
-      target: "-24 LKFS +/- 2",
+      target: "Optional / not checked by default",
       evaluate: (m) => {
         const value = parseFloatNumber(first(m, ["audio.loudness", "loudness", "integrated loudness", "audio.integrated loudness"]));
-        if (!Number.isFinite(value)) return missing("missing", "Integrated loudness metadata was not available.");
-        return value >= -26 && value <= -22
-          ? pass(formatMeasurement(value, "LKFS"))
-          : fail(formatMeasurement(value, "LKFS"), "Expected -24 LKFS with +/- 2 tolerance.");
+        return Number.isFinite(value)
+          ? info(formatMeasurement(value, "LKFS"))
+          : info("not checked", "Loudness is not checked by the default VOD profile.");
       },
     },
     {
       id: "true_peak",
       label: "True peak",
-      target: "<= -2 dBTP",
+      target: "Optional / not checked by default",
       evaluate: (m) => {
         const value = parseFloatNumber(first(m, ["audio.true peak", "true peak", "audio.true_peak", "true_peak"]));
-        if (!Number.isFinite(value)) return missing("missing", "True peak metadata was not available.");
-        return value <= -2
-          ? pass(formatMeasurement(value, "dBTP"))
-          : fail(formatMeasurement(value, "dBTP"), "Expected true peak at or below -2 dBTP.");
+        return Number.isFinite(value)
+          ? info(formatMeasurement(value, "dBTP"))
+          : info("not checked", "True peak is not checked by the default VOD profile.");
       },
     },
     {
       id: "timecode_start",
       label: "Timecode start",
-      target: "00:00:00:00 or 00;00;00;00",
+      target: "Optional in desktop Settings",
       evaluate: (m) => {
         const value = first(m, ["general.tim", "tim", "timecode", "general.timecode"]);
-        const normalized = String(value || "").trim();
-        if (!normalized) return missing("missing", "Start timecode was not available.");
-        const ok = normalized === "00:00:00:00" || normalized === "00;00;00;00";
-        return ok ? pass(normalized) : fail(normalized || "missing", "Expected SVOD start timecode at zero.");
+        return value ? info(value) : info("not checked", "Timecode Start can be enabled in the desktop app profile settings.");
       },
     },
-  ];
-
-  const INFO_CHECKS = [
     {
       id: "caption_track",
       label: "Caption/text track",
