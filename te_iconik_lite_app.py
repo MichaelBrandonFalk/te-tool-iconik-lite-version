@@ -21,7 +21,7 @@ import te_iconik_scanner as scanner
 
 
 APP_NAME = "TE Tool - Iconik Lite Version"
-VERSION = "V1.12"
+VERSION = "V1.13"
 CONFIG_DIR = Path.home() / "Library" / "Application Support" / "TE Tool Iconik Lite"
 CONFIG_PATH = CONFIG_DIR / "settings.json"
 KEYCHAIN_SERVICE = "TE Tool Iconik Lite"

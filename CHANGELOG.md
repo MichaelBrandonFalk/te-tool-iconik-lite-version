@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.13
+
+- Re-enabled Frame Rate in the default **VOD Technical Delivery Specification 2026_09_17** profile.
+- Set the default VOD frame-rate rule to pass `23.98` and `29.97` only; every other reported FPS fails.
+- Added a saved-profile migration so older saved copies of the official VOD profile also get Frame Rate checked again.
+- Updated the browser metadata checker and public page copy to match the V1.13 frame-rate behavior.
+
 ## V1.12
 
 - Updated **VOD Technical Delivery Specification 2026_09_17** so Loudness, True Peak, and Timecode Start are unchecked by default and no longer create MISSING INFO results when Iconik omits those fields.

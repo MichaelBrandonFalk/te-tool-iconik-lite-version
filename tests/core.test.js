@@ -62,8 +62,8 @@ assert.ok(!failResult.checks.some((check) => check.id === "true_peak"));
 assert.ok(failResult.infoChecks.some((check) => check.id === "true_peak" && check.status === "info"));
 
 const badFrameResult = core.evaluateMetadata(svodBadFrame, "bad-frame.txt");
-assert.strictEqual(badFrameResult.verdict, "PASS");
-assert.ok(!badFrameResult.checks.some((check) => check.id === "frame_rate"));
+assert.strictEqual(badFrameResult.verdict, "FAIL");
+assert.ok(badFrameResult.checks.some((check) => check.id === "frame_rate" && check.status === "fail"));
 
 const mp4Result = core.evaluateMetadata(svodMp4Pass, "mp4.txt");
 assert.strictEqual(mp4Result.verdict, "PASS");
@@ -90,6 +90,6 @@ const csv = core.toCsv([passResult]);
 assert.ok(csv.startsWith("title,s3_prefix,verdict,reason,check,status,value,target,note"));
 assert.ok(csv.includes("PUR0003995"));
 assert.ok(csv.includes("File type"));
-assert.strictEqual(core.VERSION, "V1.12");
+assert.strictEqual(core.VERSION, "V1.13");
 
 console.log("core tests passed");

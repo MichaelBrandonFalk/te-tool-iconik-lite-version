@@ -68,7 +68,7 @@ class ScannerTests(unittest.TestCase):
         })
         checks = scanner.evaluate_record(asset, fobj)
         self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
-        self.assertTrue(any(check.check_id == "frame_rate" and check.status == "ignored" for check in checks))
+        self.assertTrue(any(check.check_id == "frame_rate" and check.status == "pass" for check in checks))
         self.assertTrue(any(check.check_id == "chroma" and check.status == "ignored" for check in checks))
         self.assertTrue(any(check.check_id == "loudness" and check.status == "ignored" for check in checks))
         self.assertTrue(any(check.check_id == "true_peak" and check.status == "ignored" for check in checks))
@@ -76,8 +76,10 @@ class ScannerTests(unittest.TestCase):
 
         fobj["technical_metadata"]["video"]["frame rate"] = "23.964"
         checks = scanner.evaluate_record(asset, fobj)
-        self.assertEqual(scanner.verdict_from_checks(checks), "PASS")
+        self.assertTrue(any(check.check_id == "frame_rate" and check.status == "fail" for check in checks))
+        self.assertEqual(scanner.verdict_from_checks(checks), "FAIL")
 
+        fobj["technical_metadata"]["video"]["frame rate"] = "23.976"
         fobj["technical_metadata"]["video"]["color primaries"] = "BT.2020"
         checks = scanner.evaluate_record(asset, fobj)
         self.assertTrue(any(check.check_id == "color_space" and check.status == "fail" for check in checks))
@@ -145,16 +147,21 @@ class ScannerTests(unittest.TestCase):
         self.assertTrue(any(check.check_id == "timecode_start" and check.status == "ignored" for check in checks))
         self.assertEqual(scanner.verdict_from_checks(checks), "MISSING INFO")
 
-    def test_saved_official_vod_profile_migrates_loudness_peak_timecode_to_unchecked(self):
+    def test_saved_official_vod_profile_migrates_default_check_states(self):
         old_saved_profile = scanner.default_check_profile(scanner.OFFICIAL_VOD_PROFILE_NAME)
+        old_saved_profile["frame_rate"]["enabled"] = False
+        old_saved_profile["frame_rate"]["pass"] = ""
         old_saved_profile["loudness"]["enabled"] = True
         old_saved_profile["true_peak"]["enabled"] = True
         old_saved_profile["timecode_start"]["enabled"] = True
         profiles = scanner.normalize_check_profile_library(
             {scanner.OFFICIAL_VOD_PROFILE_NAME: old_saved_profile},
-            defaults_version="V1.11",
+            defaults_version="V1.12",
         )
         official = profiles[scanner.OFFICIAL_VOD_PROFILE_NAME]
+        self.assertTrue(official["frame_rate"]["enabled"])
+        self.assertEqual(official["frame_rate"]["pass"], "23.98, 29.97")
+        self.assertEqual(official["frame_rate"]["fail"], "anything else")
         self.assertFalse(official["loudness"]["enabled"])
         self.assertFalse(official["true_peak"]["enabled"])
         self.assertFalse(official["timecode_start"]["enabled"])

@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "V1.12";
+  const VERSION = "V1.13";
 
   const CHECKS = [
     {
@@ -77,6 +77,19 @@
         if (!value && !Number.isFinite(ratio)) return missing("missing", "Pixel aspect ratio was not available.");
         const ok = value === "1:1" || within(ratio, 0.995, 1.005);
         return ok ? pass(value || ratio.toFixed(3)) : fail(value || "missing", "Expected square pixels / 1:1.");
+      },
+    },
+    {
+      id: "frame_rate",
+      label: "Frame rate",
+      target: "23.98 or 29.97 fps",
+      evaluate: (m) => {
+        const fps = parseFrameRate(first(m, ["video.r frame rate", "r_frame_rate", "video.frame rate", "frame_rate", "frame rate", "video framerate", "framerate"]));
+        if (!Number.isFinite(fps)) return missing("missing", "Frame rate was not available.");
+        const rounded = roundFrameRate(fps);
+        return rounded === "23.98" || rounded === "29.97"
+          ? pass(`${rounded} fps`)
+          : fail(`${rounded} fps`, "Expected 23.98 or 29.97 fps for SVOD.");
       },
     },
     {

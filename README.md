@@ -4,29 +4,29 @@ TE Tool - Iconik Lite Version is a plug-and-play macOS app for SVOD technical me
 
 ## Version
 
-Current public version: `V1.12`
+Current public version: `V1.13`
 
 ## Download
 
 - Public page: https://michaelbrandonfalk.github.io/te-tool-iconik-lite-version/
-- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_12.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.12/TE.Tool.Iconik.Lite.Version.V1_12.macOS.Apple.Silicon.zip)
+- Mac app ZIP: [TE.Tool.Iconik.Lite.Version.V1_13.macOS.Apple.Silicon.zip](https://github.com/MichaelBrandonFalk/te-tool-iconik-lite-version/releases/download/v1.13/TE.Tool.Iconik.Lite.Version.V1_13.macOS.Apple.Silicon.zip)
 
 ## App Workflow
 
 1. Download and unzip the Mac app.
-2. Open `TE Tool Iconik Lite Version V1_12.app`.
+2. Open `TE Tool Iconik Lite Version V1_13.app`.
 3. If macOS says the app is running from a temporary private folder, click **Install to Applications and Relaunch**.
 4. Open Settings and save AWS credentials for S3 scans.
 5. Save Iconik App-ID/Auth-Token for Iconik links and metadata lookups.
 6. Click **Test Iconik** in Settings to confirm the API connection.
-7. Choose a QC profile in Settings. V1.12 ships with **VOD Technical Delivery Specification 2026_09_17**, **Original TE CHECK - Strict**, and **TE Tool Lite V1.9 SVOD**.
+7. Choose a QC profile in Settings. V1.13 ships with **VOD Technical Delivery Specification 2026_09_17**, **Original TE CHECK - Strict**, and **TE Tool Lite V1.9 SVOD**.
 8. Optional: open **Edit QC Checks...** in Settings to ignore fields or adjust pass/warning/fail criteria, then save the edited rules as a named profile.
 9. Paste an S3 bucket, folder, file path, Iconik collection link, Iconik asset link, or asset UUID.
 10. Click Scan. Use Pause, Resume, or Stop during long bucket scans.
 
 The app lists each video, retrieves Iconik metadata, applies the SVOD checks, displays PASS/WARNING/MISSING INFO/FAIL results, and writes a pastel-coded XLSX report with upload date, S3/storage path, Iconik URL, and every check field.
 
-V1.12 keeps the V1.9 temporary-launch guard: scans are blocked when macOS launches the app from a translocated/private folder, because that can be unmounted during long scans and crash the app. Use the in-app install dialog or move the app to Applications before scanning.
+V1.13 keeps the V1.9 temporary-launch guard: scans are blocked when macOS launches the app from a translocated/private folder, because that can be unmounted during long scans and crash the app. Use the in-app install dialog or move the app to Applications before scanning.
 
 ## Supported Targets
 
@@ -45,7 +45,7 @@ V1.12 keeps the V1.9 temporary-launch guard: scans are blocked when macOS launch
 - In the Mac app, secrets are saved through macOS Keychain when available and hidden by default in Settings.
 - The app can use an existing AWS provider chain/profile if AWS credentials are not saved in Settings.
 
-## V1.12 Default Profile
+## V1.13 Default Profile
 
 The shipped default profile is **VOD Technical Delivery Specification 2026_09_17**. It checks fields that Iconik/MediaInfo metadata can expose from the current VOD Technical Delivery Specification:
 
@@ -54,6 +54,7 @@ The shipped default profile is **VOD Technical Delivery Specification 2026_09_17
 - HD `1920x1080`, or SD at least `480p`
 - HD `16:9`, or SD `4:3`
 - Pixel aspect ratio `1:1`
+- Frame rate `23.98` or `29.97`; every other reported FPS fails
 - Progressive scan
 - SDR/Rec.709 color metadata
 - One stereo audio stream / 2.0 audio mapping
@@ -69,7 +70,7 @@ The XLSX report includes a `Reason` column for non-pass rows and colors each fai
 
 Settings lets users switch between named profiles, save edited criteria back to the current profile, save a profile under a new name, delete custom profiles, or restore a shipped profile to its defaults.
 
-- **VOD Technical Delivery Specification 2026_09_17** is the V1.12 default.
+- **VOD Technical Delivery Specification 2026_09_17** is the V1.13 default.
 - **Original TE CHECK - Strict** keeps the older strict TE gate: `.mov`, ProRes/apch, `>=145 Mb/s`, `1920x1080`, `16:9`, `23.98` or `29.97`, `4:2:2`, progressive, PCM, exact audio bit rate/sample rate/bit depth, stereo, Rec.709, square pixels, and start timecode.
 - **TE Tool Lite V1.9 SVOD** preserves the previous Lite behavior with MP4, `720x480`, and audio bit/sample/depth issues as warnings.
 
@@ -94,13 +95,13 @@ The public web page still includes a small browser-only metadata text checker. I
 Run the versioned build script from this directory:
 
 ```bash
-./build_te_tool_iconik_lite_v1_12_mac.sh
+./build_te_tool_iconik_lite_v1_13_mac.sh
 ```
 
 The script creates:
 
-- `dist/TE Tool Iconik Lite Version V1_12.app`
-- `downloads/TE.Tool.Iconik.Lite.Version.V1_12.macOS.Apple.Silicon.zip`
+- `dist/TE Tool Iconik Lite Version V1_13.app`
+- `downloads/TE.Tool.Iconik.Lite.Version.V1_13.macOS.Apple.Silicon.zip`
 
 ## Versioning
 

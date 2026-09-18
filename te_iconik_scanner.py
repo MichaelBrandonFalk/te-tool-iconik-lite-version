@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 from xml.sax.saxutils import escape
 
 
-VERSION = "V1.12"
+VERSION = "V1.13"
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".mxf"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ANY_UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -66,8 +66,16 @@ OFFICIAL_VOD_PROFILE_NAME = "VOD Technical Delivery Specification 2026_09_17"
 STRICT_PROFILE_NAME = "Original TE CHECK - Strict"
 LEGACY_LITE_PROFILE_NAME = "TE Tool Lite V1.9 SVOD"
 LEGACY_CUSTOM_PROFILE_NAME = "Previous Saved Custom Profile"
-CHECK_PROFILE_DEFAULTS_VERSION = "V1.12"
+CHECK_PROFILE_DEFAULTS_VERSION = "V1.13"
 OFFICIAL_VOD_DISABLED_BY_DEFAULT_CHECKS = {"loudness", "true_peak", "timecode_start"}
+OFFICIAL_VOD_ENABLED_BY_DEFAULT_RULES = {
+    "frame_rate": {
+        "enabled": True,
+        "pass": "23.98, 29.97",
+        "warning": "",
+        "fail": "anything else",
+    },
+}
 
 OFFICIAL_VOD_CHECK_PROFILE = {
     "file_type": {
@@ -107,10 +115,10 @@ OFFICIAL_VOD_CHECK_PROFILE = {
         "fail": "anything else",
     },
     "frame_rate": {
-        "enabled": False,
-        "pass": "",
+        "enabled": True,
+        "pass": "23.98, 29.97",
         "warning": "",
-        "fail": "",
+        "fail": "anything else",
     },
     "chroma": {
         "enabled": False,
@@ -367,6 +375,8 @@ def normalize_check_profile_library(
             if clean_name == OFFICIAL_VOD_PROFILE_NAME and migrate_saved_official_profile:
                 for check_id in OFFICIAL_VOD_DISABLED_BY_DEFAULT_CHECKS:
                     normalized[clean_name][check_id]["enabled"] = False
+                for check_id, rule in OFFICIAL_VOD_ENABLED_BY_DEFAULT_RULES.items():
+                    normalized[clean_name][check_id].update(rule)
     if isinstance(legacy_profile, dict):
         normalized.setdefault(LEGACY_CUSTOM_PROFILE_NAME, normalize_check_profile(legacy_profile))
     return normalized
